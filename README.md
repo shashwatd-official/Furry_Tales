@@ -1,8 +1,21 @@
-# Furry Tales — Phase 0
+# Furry Tales
 
-Furry Tales connects animal adoption centers to adopters online with an accompanying pet food store.
+> Where every animal has a story, and every adoption begins a new one.
 
-Phase 0 provides the foundation: repository folder structure, database schema with Prisma & PostgreSQL, design tokens with Tailwind CSS & Google Fonts, an Express API with database health checks, an idempotent owner seed script, and a React + Vite + React Router placeholder frontend.
+A full-stack pet adoption + food store platform built with React + Vite + Tailwind CSS on the frontend and Node.js + Express + Prisma + PostgreSQL on the backend.
+
+---
+
+## Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | React 19 + Vite + Tailwind CSS 3 + React Router 7 |
+| Backend | Node.js + Express 5 |
+| Database | PostgreSQL via Prisma 6 |
+| Auth | bcrypt + JWT in HttpOnly cookie |
+| Storage | Supabase Storage (private bucket) |
+| Geocoding | OpenStreetMap Nominatim |
 
 ---
 
@@ -10,150 +23,180 @@ Phase 0 provides the foundation: repository folder structure, database schema wi
 
 ```
 furry-tales/
-├── docs/                      # Product specs (PRD, UI Brief, Tech Spec)
-├── client/                    # React (Vite) + Tailwind CSS + React Router
+├── docs/                             # PRD, UI Brief, Tech Spec
+├── client/                           # React (Vite) frontend
 │   ├── src/
-│   │   ├── App.jsx            # Router and placeholder home screen
-│   │   ├── index.css          # Tailwind directives & base typography
-│   │   └── main.jsx
-│   ├── index.html             # Google Fonts (Nunito, Inter)
-│   ├── tailwind.config.js     # Design tokens (palette, typography, shadows, radius)
+│   │   ├── api/index.js              # Axios API helpers
+│   │   ├── components/
+│   │   │   ├── RequireRole.jsx       # Role-protected route guard
+│   │   │   └── RootRoute.jsx         # / redirect logic
+│   │   ├── context/AuthContext.jsx   # Auth state & /api/auth/me
+│   │   ├── pages/
+│   │   │   ├── LoginPage.jsx         # Split-panel sign-in/sign-up
+│   │   │   ├── AdopterHome.jsx       # Adopter placeholder
+│   │   │   ├── CenterDashboard.jsx   # Pending/Rejected/Approved screens
+│   │   │   └── OwnerPanel.jsx        # Owner placeholder
+│   │   ├── App.jsx                   # Router + AuthProvider
+│   │   └── index.css                 # Tailwind + base typography
+│   ├── tailwind.config.js            # Design tokens
+│   ├── vite.config.js                # /api proxy to :5000
 │   └── package.json
-├── server/                    # Node.js + Express API
+├── server/                           # Express API
 │   ├── prisma/
-│   │   ├── schema.prisma      # PostgreSQL schema with all Phase 0 tables
-│   │   ├── migrations/        # 0_init migration with constraints
-│   │   └── seed.js            # Idempotent owner account seed script
+│   │   ├── schema.prisma             # All 9 tables
+│   │   ├── migrations/0_init/        # SQL migration
+│   │   └── seed.js                   # Owner account seed
 │   ├── src/
-│   │   ├── config/db.js       # Prisma client connection
-│   │   ├── routes/health.js   # GET /api/health endpoint
-│   │   └── index.js           # Express app setup
+│   │   ├── config/db.js              # Prisma client
+│   │   ├── controllers/
+│   │   │   └── auth.controller.js    # 5 auth endpoints
+│   │   ├── middleware/
+│   │   │   └── auth.js               # requireAuth + requireRole
+│   │   ├── routes/
+│   │   │   ├── health.js             # GET /api/health
+│   │   │   └── auth.js               # /api/auth/*
+│   │   ├── utils/
+│   │   │   ├── geocode.js            # Nominatim pincode lookup
+│   │   │   └── storage.js            # Supabase Storage upload
+│   │   ├── validators/
+│   │   │   └── auth.validators.js    # Zod schemas
+│   │   └── index.js                  # Express app
 │   └── package.json
-├── .env                       # Environment secrets (ignored by Git)
-├── .env.example               # Template environment variables
-├── .gitignore                 # Ignores .env, node_modules, build outputs
-└── package.json               # Root convenience runner scripts
+├── .env                              # Secrets (git-ignored)
+├── .env.example                      # Variable names, empty values
+├── .gitignore
+└── README.md
 ```
 
 ---
 
 ## Prerequisites
 
-- **Node.js**: v18+ (verified on Node v24)
-- **PostgreSQL**: A running PostgreSQL instance (e.g., Supabase, Neon, or local PostgreSQL)
+- Node.js v18+
+- PostgreSQL database (Supabase, Neon, or local)
+- A Supabase project with a **private** bucket named `verification-docs`
 
 ---
 
-## Step-by-Step Setup Instructions
+## 1. Configure Environment
 
-### 1. Configure Environment Variables
-
-Open the `.env` file in the project root (`c:\Website\Furry Tales\.env`) and fill in your values:
+Fill in `c:\Website\Furry Tales\.env` (the root `.env` file, **not** inside `server/`):
 
 ```env
 DATABASE_URL="postgresql://<user>:<password>@<host>:<port>/<dbname>?schema=public"
-JWT_SECRET="your-super-secret-jwt-key"
+JWT_SECRET="your-very-long-random-secret"
 OWNER_EMAIL="owner@furrytales.org"
-OWNER_PASSWORD="your-secure-owner-password"
-EMAIL_API_KEY=""
-EMAIL_FROM=""
-STORAGE_URL=""
-STORAGE_KEY=""
+OWNER_PASSWORD="your-owner-password"
+EMAIL_API_KEY=
+EMAIL_FROM=
+STORAGE_URL="https://<your-project>.supabase.co"
+STORAGE_KEY="<your supabase service_role key>"
 FRONTEND_URL="http://localhost:5173"
 ```
 
-> **Note**: For local testing of the database connection and seeding, `DATABASE_URL`, `OWNER_EMAIL`, and `OWNER_PASSWORD` are required.
+> **Supabase Storage setup (one-time):**
+> 1. Go to your Supabase dashboard → Storage → New bucket
+> 2. Name it `verification-docs`, set it to **Private**
+> 3. Copy the **service_role** key from Settings → API → Project API Keys → `service_role`
+> 4. Paste it as `STORAGE_KEY` in `.env`
 
 ---
 
-### 2. Install Dependencies
+## 2. Install Dependencies
 
-Install dependencies for both `server` and `client`:
-
-```bash
-# In the project root:
+```powershell
 cd server
 npm install
-cd ../client
+
+cd ..\client
 npm install
-cd ..
 ```
 
 ---
 
-### 3. Set Up Database Schema & Migrations
+## 3. Set Up the Database
 
-To apply all tables, enums, foreign keys, and custom constraints:
+Run the migration to create all tables:
 
-```bash
+```powershell
 cd server
-npm run prisma:migrate
-npm run prisma:generate
-cd ..
-```
-
-Alternatively, if developing locally against a new dev database, you can run:
-```bash
-cd server
-npx prisma migrate dev --name init
-cd ..
+npm run prisma:migrate      # deploys migrations to your Postgres DB
+npm run prisma:generate     # generates the Prisma client
 ```
 
 ---
 
-### 4. Seed the Owner Account
+## 4. Seed the Owner Account
 
-Run the seed script (from the `server` directory or root):
-
-```bash
+```powershell
 cd server
 npm run seed:owner
 ```
 
-- Hashes the password using `bcrypt` (10 salt rounds).
-- Sets `role` to `owner`.
-- Running it a second time will verify the owner exists and will safely skip duplicate creation.
+- Creates the owner account using `OWNER_EMAIL` and `OWNER_PASSWORD` from `.env`
+- Password is bcrypt-hashed (12 rounds)
+- Running it twice is safe — it skips if the owner already exists
 
 ---
 
-### 5. Start the Development Servers
+## 5. Start Both Servers
 
-Open two terminal windows:
+Open **two** terminal windows:
 
-#### Terminal 1 — Start the Backend Server:
-```bash
+**Terminal 1 — Backend (port 5000):**
+```powershell
 cd server
 npm run dev
 ```
-The server will start on `http://localhost:5000`.
 
-#### Terminal 2 — Start the Frontend Client:
-```bash
+**Terminal 2 — Frontend (port 5173):**
+```powershell
 cd client
 npm run dev
 ```
-The client will start on `http://localhost:5173`.
+
+Then open **http://localhost:5173** in your browser.
 
 ---
 
-## Verifying Phase 0
+## 6. Test Checklist
 
-1. **Verify Health & DB Connection**:
-   - Open your browser or use curl:
-     ```bash
-     curl http://localhost:5000/api/health
-     ```
-   - Expect response:
-     ```json
-     {
-       "status": "ok",
-       "database": "connected",
-       "timestamp": "2026-10-27T..."
-     }
-     ```
-2. **Verify Frontend**:
-   - Navigate to `http://localhost:5173`
-   - You should see the centered card with the Furry Tales paw logo and heading styled with Nunito & warm palette design tokens.
-3. **Verify Idempotent Seeding**:
-   - Run `npm run seed:owner` again in the `server` directory.
-   - Confirm it prints: `Owner account already exists (...). Skipping duplicate creation.`
+### Verify health + DB
+```powershell
+Invoke-RestMethod http://localhost:5000/api/health
+# → { status: "ok", database: "connected", ... }
+```
+
+### Test auth endpoints directly
+```powershell
+# Must return 401 (no cookie)
+Invoke-WebRequest http://localhost:5000/api/auth/me -ErrorAction SilentlyContinue
+
+# Must return 401 with "Invalid credentials." (not "user not found")
+$body = '{"email":"nobody@example.com","password":"wrong"}'
+Invoke-WebRequest http://localhost:5000/api/auth/login -Method POST -ContentType "application/json" -Body $body -ErrorAction SilentlyContinue
+```
+
+### User flow
+1. Go to http://localhost:5173 → see the two-panel login screen
+2. Sign up as adopter → lands on `/home`
+3. Sign up as center admin (with a PDF/JPG/PNG doc) → lands on `/center` (Pending screen)
+4. Log in as owner (use the **center panel**) → lands on `/owner`
+5. While logged in as adopter, manually navigate to `/center` or `/owner` → redirected to `/home`
+6. Log out → trying any protected URL redirects to `/`
+
+---
+
+## Phases
+
+| Phase | Status |
+|---|---|
+| 0 — Project setup, DB, design tokens, seed | ✅ Done |
+| 1 — Auth, roles, split-panel UI, protected routes | ✅ Done |
+| 2 — Owner panel: center approval | ⬜ Next |
+| 3 — Admin: animal listings with photo upload | ⬜ Pending |
+| 4 — Adopter browse: home, categories, distance | ⬜ Pending |
+| 5 — Applications: form, review, status | ⬜ Pending |
+| 6 — Favorites | ⬜ Pending |
+| 7 — Food store, cart, orders | ⬜ Pending |
+| 8 — Security pass, animated login, deploy | ⬜ Pending |
