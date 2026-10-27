@@ -1,0 +1,224 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  adopter
+  center_admin
+  owner
+}
+
+enum CenterStatus {
+  pending
+  approved
+  rejected
+  suspended
+}
+
+enum AnimalCategory {
+  dog
+  cat
+  other
+}
+
+enum AnimalStatus {
+  available
+  pending_pickup
+  adopted
+  removed
+}
+
+enum ApplicationStatus {
+  pending
+  approved
+  rejected
+  not_selected
+  cancelled
+}
+
+enum OrderStatus {
+  placed
+  confirmed
+  completed
+  cancelled
+}
+
+model User {
+  id            String         @id @default(uuid())
+  name          String
+  email         String         @unique
+  password_hash String
+  role          Role           @default(adopter)
+  phone         String?
+  city          String?
+  pincode       String?
+  latitude      Float?
+  longitude     Float?
+  center_id     String?
+  created_at    DateTime       @default(now())
+
+  // Relations
+  center        Center?        @relation("UserCenter", fields: [center_id], references: [id])
+  reviewed_centers Center[]    @relation("CenterReviewer")
+  applications  Application[]
+  favorites     Favorite[]
+  orders        Order[]
+
+  @@map("users")
+}
+
+model Center {
+  id                   String        @id @default(uuid())
+  name                 String
+  address              String
+  city                 String
+  pincode              String
+  latitude             Float?
+  longitude            Float?
+  contact_email        String
+  phone                String
+  description          String?
+  photo_url            String?
+  verification_doc_url String?
+  status               CenterStatus  @default(pending)
+  rejection_reason     String?
+  reviewed_at          DateTime?
+  reviewed_by          String?
+  created_at           DateTime      @default(now())
+
+  // Relations
+  reviewer             User?         @relation("CenterReviewer", fields: [reviewed_by], references: [id])
+  users                User[]        @relation("UserCenter")
+  animals              Animal[]
+  applications         Application[]
+
+  @@map("centers")
+}
+
+model Animal {
+  id             String          @id @default(uuid())
+  center_id      String
+  name           String
+  category       AnimalCategory
+  breed          String
+  age_months     Int
+  gender         String
+  size           String
+  good_with_kids Boolean         @default(false)
+  good_with_pets Boolean         @default(false)
+  vaccinated     Boolean         @default(false)
+  neutered       Boolean         @default(false)
+  description    String
+  story          String?
+  status         AnimalStatus    @default(available)
+  created_at     DateTime        @default(now())
+
+  // Relations
+  center         Center          @relation(fields: [center_id], references: [id])
+  photos         AnimalPhoto[]
+  applications   Application[]
+  favorites      Favorite[]
+
+  @@map("animals")
+}
+
+model AnimalPhoto {
+  id         String   @id @default(uuid())
+  animal_id  String
+  url        String
+  is_primary Boolean  @default(false)
+  position   Int      @default(0)
+  created_at DateTime @default(now())
+
+  // Relations
+  animal     Animal   @relation(fields: [animal_id], references: [id], onDelete: Cascade)
+
+  @@map("animal_photos")
+}
+
+model Application {
+  id          String            @id @default(uuid())
+  user_id     String
+  animal_id   String
+  center_id   String
+  form_data   Json
+  status      ApplicationStatus @default(pending)
+  admin_note  String?
+  decided_at  DateTime?
+  created_at  DateTime          @default(now())
+
+  // Relations
+  user        User              @relation(fields: [user_id], references: [id])
+  animal      Animal            @relation(fields: [animal_id], references: [id])
+  center      Center            @relation(fields: [center_id], references: [id])
+
+  @@map("applications")
+}
+
+model Favorite {
+  id         String   @id @default(uuid())
+  user_id    String
+  animal_id  String
+  created_at DateTime @default(now())
+
+  // Relations
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  animal     Animal   @relation(fields: [animal_id], references: [id], onDelete: Cascade)
+
+  // Constraint: user_id + animal_id pair is unique
+  @@unique([user_id, animal_id])
+  @@map("favorites")
+}
+
+model Product {
+  id          String      @id @default(uuid())
+  name        String
+  category    String
+  description String
+  price       Decimal     @db.Decimal(10, 2)
+  stock_count Int         @default(0)
+  image_url   String?
+  is_active   Boolean     @default(true)
+  created_at  DateTime    @default(now())
+
+  // Relations
+  order_items OrderItem[]
+
+  @@map("products")
+}
+
+model Order {
+  id               String      @id @default(uuid())
+  user_id          String
+  status           OrderStatus @default(placed)
+  total            Decimal     @db.Decimal(10, 2)
+  delivery_address String
+  phone            String
+  created_at       DateTime    @default(now())
+
+  // Relations
+  user             User        @relation(fields: [user_id], references: [id])
+  items            OrderItem[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id                String   @id @default(uuid())
+  order_id          String
+  product_id        String
+  quantity          Int
+  price_at_purchase Decimal  @db.Decimal(10, 2)
+  created_at        DateTime @default(now())
+
+  // Relations
+  order             Order    @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  product           Product  @relation(fields: [product_id], references: [id])
+
+  @@map("order_items")
+}
