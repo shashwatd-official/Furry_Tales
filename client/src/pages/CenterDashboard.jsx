@@ -69,7 +69,7 @@ function RejectedScreen({ centerName, rejectionReason, onLogout }) {
         </div>
       )}
       <p className="mt-4 text-sm text-muted">
-        Please contact <a href="mailto:support@furrytales.org" className="text-primary underline">support@furrytales.org</a> if you believe this is an error.
+        Please contact <a href="mailto:furrytales2610@gmail.com" className="text-primary underline">support@furrytales.org</a> if you believe this is an error.
       </p>
       <button
         onClick={onLogout}

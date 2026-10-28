@@ -78,6 +78,11 @@ furry-tales/
 
 ---
 
+> ⚠️ **CRITICAL DATABASE RULE**
+> Never run `prisma migrate dev`, `prisma migrate reset`, or `prisma db push` on this project. It contains database rules and custom triggers/constraints Prisma cannot see. Only use `npm run prisma:migrate` (which runs `prisma migrate deploy`).
+
+---
+
 ## 1. Configure Environment
 
 Fill in `c:\Website\Furry Tales\.env` (the root `.env` file, **not** inside `server/`):
@@ -87,12 +92,23 @@ DATABASE_URL="postgresql://<user>:<password>@<host>:<port>/<dbname>?schema=publi
 JWT_SECRET="your-very-long-random-secret"
 OWNER_EMAIL="owner@furrytales.org"
 OWNER_PASSWORD="your-owner-password"
-EMAIL_API_KEY=
-EMAIL_FROM=
+SMTP_HOST="smtp.gmail.com"
+SMTP_PORT=587
+SMTP_USER="your-email@gmail.com"
+SMTP_PASS="your-app-password"
+EMAIL_FROM="Furry Tales <no-reply@furrytales.org>"
 STORAGE_URL="https://<your-project>.supabase.co"
 STORAGE_KEY="<your supabase service_role key>"
 FRONTEND_URL="http://localhost:5173"
 ```
+
+> **How to create a Gmail App Password for local email testing:**
+> 1. Sign in to your Google Account.
+> 2. Go to **Security** → **2-Step Verification** (ensure 2-Step Verification is ON).
+> 3. Scroll to the bottom of the page and select **App passwords**.
+> 4. Enter a name (e.g. `Furry Tales Local`) and click **Create**.
+> 5. Copy the 16-character generated password (without spaces) and paste it as `SMTP_PASS` in your `.env`.
+> 6. Set `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, and `SMTP_USER=your-email@gmail.com`.
 
 > **Supabase Storage setup (one-time):**
 > 1. Go to your Supabase dashboard → Storage → New bucket
@@ -116,11 +132,11 @@ npm install
 
 ## 3. Set Up the Database
 
-Run the migration to create all tables:
+Deploy migrations to your database:
 
 ```powershell
 cd server
-npm run prisma:migrate      # deploys migrations to your Postgres DB
+npm run prisma:migrate      # deploys migrations via `prisma migrate deploy`
 npm run prisma:generate     # generates the Prisma client
 ```
 
@@ -193,8 +209,8 @@ Invoke-WebRequest http://localhost:5000/api/auth/login -Method POST -ContentType
 |---|---|
 | 0 — Project setup, DB, design tokens, seed | ✅ Done |
 | 1 — Auth, roles, split-panel UI, protected routes | ✅ Done |
-| 2 — Owner panel: center approval | ⬜ Next |
-| 3 — Admin: animal listings with photo upload | ⬜ Pending |
+| Phase 2 — Owner panel: center approval | ✅ Done |
+| Phase 3 — Admin: animal listings with photo upload | ⬜ Next |
 | 4 — Adopter browse: home, categories, distance | ⬜ Pending |
 | 5 — Applications: form, review, status | ⬜ Pending |
 | 6 — Favorites | ⬜ Pending |
