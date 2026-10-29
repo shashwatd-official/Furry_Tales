@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { homeRouteForUser } from '../context/AuthContext';
 import { signupAdopter, signupCenter, login as apiLogin } from '../api';
 
 /* ── Tiny shared components ─────────────────────────────────────── */
@@ -149,11 +150,10 @@ function AdopterSignupForm({ onSuccess }) {
     setLoading(true);
     setApiError('');
     try {
-      const res = await signupAdopter(form);
-      onSuccess(res.data.user);
+      await signupAdopter(form);
+      await onSuccess(); // navigates away; component unmounts; setLoading not needed after this
     } catch (err) {
       setApiError(err.response?.data?.error || 'Signup failed. Please try again.');
-    } finally {
       setLoading(false);
     }
   };
@@ -186,11 +186,10 @@ function AdopterSigninForm({ onSuccess }) {
     setLoading(true);
     setApiError('');
     try {
-      const res = await apiLogin(form);
-      onSuccess(res.data.user);
+      await apiLogin(form);
+      await onSuccess(); // navigates away; component unmounts
     } catch (err) {
       setApiError(err.response?.data?.error || 'Login failed. Please try again.');
-    } finally {
       setLoading(false);
     }
   };
@@ -249,11 +248,10 @@ function CenterSignupForm({ onSuccess }) {
       Object.entries(form).forEach(([k, v]) => fd.append(k, v));
       fd.append('verificationDoc', docFile);
 
-      const res = await signupCenter(fd);
-      onSuccess(res.data.user);
+      await signupCenter(fd);
+      await onSuccess(); // navigates away; component unmounts
     } catch (err) {
       setApiError(err.response?.data?.error || 'Signup failed. Please try again.');
-    } finally {
       setLoading(false);
     }
   };
@@ -324,11 +322,10 @@ function CenterSigninForm({ onSuccess }) {
     setLoading(true);
     setApiError('');
     try {
-      const res = await apiLogin(form);
-      onSuccess(res.data.user);
+      await apiLogin(form);
+      await onSuccess(); // navigates away; component unmounts
     } catch (err) {
       setApiError(err.response?.data?.error || 'Login failed. Please try again.');
-    } finally {
       setLoading(false);
     }
   };
@@ -393,17 +390,26 @@ function RolePanel({ role, onClick }) {
 /* ── Auth form container (shown after panel click) ───────────────── */
 function AuthFormPanel({ role, onBack }) {
   const [mode, setMode] = useState('signin'); // 'signin' | 'signup'
-  const { setUser } = useAuth();
+  const { refresh } = useAuth();
   const navigate = useNavigate();
   const isAdopt = role === 'adopt';
 
-  const handleSuccess = (user) => {
-    setUser(user);
-    // Redirect to the correct page based on ACTUAL role from server
-    if (user.role === 'owner') return navigate('/owner');
-    if (user.role === 'center_admin') return navigate('/center');
-    return navigate('/home');
+  /**
+   * Called by every form (login + signup, both panels) after the API call succeeds.
+   *
+   * We deliberately IGNORE the user object from the login/signup response body
+   * and call GET /api/auth/me instead — the single source of truth.
+   * This is the ONLY way to guarantee we have the real center.status
+   * (e.g. 'approved' vs 'pending') before deciding where to navigate.
+   *
+   * refresh() both stores the user in AuthContext AND returns it, so we
+   * only make one /api/auth/me network request.
+   */
+  const handleSuccess = async () => {
+    const freshUser = await refresh();
+    navigate(homeRouteForUser(freshUser), { replace: true });
   };
+
 
   return (
     <div

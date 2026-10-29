@@ -14,7 +14,8 @@ A full-stack pet adoption + food store platform built with React + Vite + Tailwi
 | Backend | Node.js + Express 5 |
 | Database | PostgreSQL via Prisma 6 |
 | Auth | bcrypt + JWT in HttpOnly cookie |
-| Storage | Supabase Storage (private bucket) |
+| Storage | Supabase Storage (private `verification-docs` + public `images` buckets) |
+| Image processing | **sharp** — auto-rotate, resize ≤ 1600 px, strip metadata, output WebP quality 80 |
 | Geocoding | OpenStreetMap Nominatim |
 
 ---
@@ -49,17 +50,26 @@ furry-tales/
 │   ├── src/
 │   │   ├── config/db.js              # Prisma client
 │   │   ├── controllers/
-│   │   │   └── auth.controller.js    # 5 auth endpoints
+│   │   │   ├── auth.controller.js    # 5 auth endpoints
+│   │   │   ├── center.controller.js  # 9 center admin endpoints
+│   │   │   └── owner.controller.js   # 6 owner panel endpoints
 │   │   ├── middleware/
-│   │   │   └── auth.js               # requireAuth + requireRole
+│   │   │   ├── auth.js               # requireAuth + requireRole
+│   │   │   └── center.js             # requireCenterAdmin + requireApprovedCenter
 │   │   ├── routes/
 │   │   │   ├── health.js             # GET /api/health
-│   │   │   └── auth.js               # /api/auth/*
+│   │   │   ├── auth.js               # /api/auth/*
+│   │   │   ├── center.js             # /api/center/*
+│   │   │   └── owner.js              # /api/owner/*
 │   │   ├── utils/
 │   │   │   ├── geocode.js            # Nominatim pincode lookup
-│   │   │   └── storage.js            # Supabase Storage upload
+│   │   │   ├── imageProcessing.js    # sharp re-encode to WebP
+│   │   │   ├── imageUpload.js        # multer config + error wrapper
+│   │   │   └── storage.js            # Supabase Storage (private + public buckets)
 │   │   ├── validators/
-│   │   │   └── auth.validators.js    # Zod schemas
+│   │   │   ├── auth.validators.js    # Zod schemas (auth)
+│   │   │   ├── center.validators.js  # Zod schemas (center + animals)
+│   │   │   └── owner.validators.js   # Zod schemas (owner panel)
 │   │   └── index.js                  # Express app
 │   └── package.json
 ├── .env                              # Secrets (git-ignored)
@@ -74,7 +84,11 @@ furry-tales/
 
 - Node.js v18+
 - PostgreSQL database (Supabase, Neon, or local)
-- A Supabase project with a **private** bucket named `verification-docs`
+- A Supabase project with:
+  - A **private** bucket named `verification-docs` (verification documents for center sign-up)
+  - A **public** bucket named `images` (center photos + animal photos — must be public so URLs work without signing)
+
+> **One-photo-per-animal decision:** Each animal has exactly **one** photo. See `docs/decisions.md` for the full list of design decisions that override the PRD/UI brief/tech spec.
 
 ---
 
@@ -197,9 +211,32 @@ Invoke-WebRequest http://localhost:5000/api/auth/login -Method POST -ContentType
 1. Go to http://localhost:5173 → see the two-panel login screen
 2. Sign up as adopter → lands on `/home`
 3. Sign up as center admin (with a PDF/JPG/PNG doc) → lands on `/center` (Pending screen)
-4. Log in as owner (use the **center panel**) → lands on `/owner`
-5. While logged in as adopter, manually navigate to `/center` or `/owner` → redirected to `/home`
-6. Log out → trying any protected URL redirects to `/`
+4. Log in as owner → lands on `/owner`, approve the center
+5. Log back in as center admin → redirected to `/center/animals`
+6. Complete profile (/center/profile) → add an animal with photo → see it in the animals table
+7. While logged in as adopter, navigate to `/center/animals` → redirected to `/home`
+
+---
+
+## 7. Center Admin API Endpoints (Phase 3)
+
+All routes require a logged-in `center_admin` with a center. Write routes (`PATCH`, `POST`, `DELETE`) also require `status = "approved"`.
+
+| Method | Path | Note |
+|---|---|---|
+| GET | `/api/center` | Own center profile + `profile_complete` + `animal_count` |
+| PATCH | `/api/center` | Update profile fields (strict — unknown fields → 400) |
+| POST | `/api/center/photo` | Upload / replace center photo (`multipart`, field: `photo`) |
+| GET | `/api/center/animals?status=` | Own animals. Default = all except removed. `all` includes removed. |
+| POST | `/api/center/animals` | Create animal + photo together (`multipart`, field: `photo`) |
+| PATCH | `/api/center/animals/:id` | Update text fields (JSON). No status/center_id. Ownership enforced. |
+| DELETE | `/api/center/animals/:id` | Soft-remove (sets `status = "removed"`). Blocked if `pending_pickup`. |
+| PATCH | `/api/center/animals/:id/status` | Move `pending_pickup → adopted` or `pending_pickup → available` only. |
+| POST | `/api/center/animals/:id/photos` | Replace the single photo. Ownership checked before file. |
+
+**Photo rules:** JPG, PNG or WebP only · max 5 MB · detected from file contents (not extension) · re-encoded with **sharp** (auto-rotate, ≤ 1600 px longest side, strip metadata, WebP quality 80).
+
+**`center_id` rule:** Never taken from the request body or URL for write operations — always loaded fresh from the logged-in admin's DB record.
 
 ---
 
@@ -210,9 +247,10 @@ Invoke-WebRequest http://localhost:5000/api/auth/login -Method POST -ContentType
 | 0 — Project setup, DB, design tokens, seed | ✅ Done |
 | 1 — Auth, roles, split-panel UI, protected routes | ✅ Done |
 | Phase 2 — Owner panel: center approval | ✅ Done |
-| Phase 3 — Admin: animal listings with photo upload | ⬜ Next |
-| 4 — Adopter browse: home, categories, distance | ⬜ Pending |
+| Phase 3 — Admin: animal listings with photo upload | ✅ Done |
+| 4 — Adopter browse: home, categories, distance | ⬜ Next |
 | 5 — Applications: form, review, status | ⬜ Pending |
 | 6 — Favorites | ⬜ Pending |
 | 7 — Food store, cart, orders | ⬜ Pending |
 | 8 — Security pass, animated login, deploy | ⬜ Pending |
+

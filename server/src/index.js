@@ -9,6 +9,7 @@ const cookieParser = require('cookie-parser');
 const healthRoutes = require('./routes/health');
 const authRoutes = require('./routes/auth');
 const ownerRoutes = require('./routes/owner');
+const centerRoutes = require('./routes/center');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -26,6 +27,7 @@ app.use(cookieParser());
 app.use('/api', healthRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/owner', ownerRoutes);
+app.use('/api/center', centerRoutes);
 
 // ── Global error handler ──────────────────────────────────────────────────────
 // Catches anything thrown inside async route handlers (Express 5 propagates them)

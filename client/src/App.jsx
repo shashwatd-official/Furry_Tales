@@ -4,6 +4,9 @@ import RootRoute from './components/RootRoute';
 import RequireRole from './components/RequireRole';
 import AdopterHome from './pages/AdopterHome';
 import CenterDashboard from './pages/CenterDashboard';
+import CenterAnimalsPage from './pages/CenterAnimalsPage';
+import CenterAnimalFormPage from './pages/CenterAnimalFormPage';
+import CenterProfilePage from './pages/CenterProfilePage';
 import OwnerPanel from './pages/OwnerPanel';
 
 function App() {
@@ -30,6 +33,38 @@ function App() {
             element={
               <RequireRole allowedRoles={['center_admin']}>
                 <CenterDashboard />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/center/animals"
+            element={
+              <RequireRole allowedRoles={['center_admin']}>
+                <CenterAnimalsPage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/center/animals/new"
+            element={
+              <RequireRole allowedRoles={['center_admin']}>
+                <CenterAnimalFormPage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/center/animals/:id/edit"
+            element={
+              <RequireRole allowedRoles={['center_admin']}>
+                <CenterAnimalFormPage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/center/profile"
+            element={
+              <RequireRole allowedRoles={['center_admin']}>
+                <CenterProfilePage />
               </RequireRole>
             }
           />

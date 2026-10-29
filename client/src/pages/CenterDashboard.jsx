@@ -159,7 +159,9 @@ export default function CenterDashboard() {
       return <SuspendedScreen centerName={center.name} onLogout={handleLogout} />;
     }
     if (status === 'approved') {
-      return <DashboardPlaceholder centerName={center.name} onLogout={handleLogout} />;
+      // Approved admins go to the full Animals dashboard
+      navigate('/center/animals', { replace: true });
+      return null;
     }
     // Fallback – shouldn't happen
     return <p className="text-muted text-sm">Unknown center status. Please log out and contact support.</p>;
@@ -173,3 +175,4 @@ export default function CenterDashboard() {
     </div>
   );
 }
+
