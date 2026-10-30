@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import AdminLayout from '../components/AdminLayout';
 import {
-  getAnimals,
+  getCenterAnimals,
   createAnimal,
   updateAnimal,
   replaceAnimalPhoto,
@@ -212,7 +212,7 @@ export default function CenterAnimalFormPage() {
   useEffect(() => {
     if (!isEdit) return;
     setLoading(true);
-    getAnimals('all')
+    getCenterAnimals('all')
       .then((res) => {
         const animal = res.data.animals?.find((a) => a.id === id);
         if (!animal) {

@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import AdminLayout from '../components/AdminLayout';
 import {
   getCenterProfile,
-  getAnimals,
+  getCenterAnimals,
   removeAnimal,
   updateAnimalStatus,
 } from '../api';
@@ -28,8 +28,19 @@ const STATUS_CONFIG = {
   removed: { label: 'Removed', icon: '✕', color: 'bg-border text-muted border-border' },
 };
 
-function StatusBadge({ status }) {
-  const cfg = STATUS_CONFIG[status] || { label: status, icon: '?', color: 'bg-border text-muted border-border' };
+function StatusBadge({ status, animalId }) {
+  const cfg = STATUS_CONFIG[status];
+
+  if (!cfg) {
+    console.warn(`[StatusBadge] Animal ${animalId || 'unknown'}: unrecognized or missing status "${status}"`);
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border bg-error/10 text-error border-error/30">
+        <span aria-hidden="true">⚠️</span>
+        Unknown status
+      </span>
+    );
+  }
+
   return (
     <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${cfg.color}`}>
       <span aria-hidden="true">{cfg.icon}</span>
@@ -104,7 +115,7 @@ export default function CenterAnimalsPage() {
     try {
       const [centerRes, animalsRes] = await Promise.all([
         getCenterProfile(),
-        getAnimals(statusFilter),
+        getCenterAnimals(statusFilter),
       ]);
       setCenter(centerRes.data.center);
       setAnimals(animalsRes.data.animals || []);
@@ -417,7 +428,7 @@ function AnimalRow({ animal, onEdit, onRemove, onMarkAdopted, onReturnAvailable 
       <td className="px-4 py-3 capitalize text-muted">{animal.gender}</td>
       <td className="px-4 py-3 capitalize text-muted">{animal.size}</td>
       <td className="px-4 py-3">
-        <StatusBadge status={animal.status} />
+        <StatusBadge status={animal.status} animalId={animal.id} />
       </td>
       <td className="px-4 py-3">
         <div className="flex items-center justify-end gap-2">
@@ -483,7 +494,7 @@ function AnimalCard({ animal, onEdit, onRemove, onMarkAdopted, onReturnAvailable
             <p className="text-xs text-muted capitalize">{animal.category} · {animal.breed}</p>
             <p className="text-xs text-muted mt-0.5">{formatAge(animal.age_months)} · {animal.gender} · {animal.size}</p>
           </div>
-          <StatusBadge status={animal.status} />
+          <StatusBadge status={animal.status} animalId={animal.id} />
         </div>
         <div className="flex flex-wrap gap-2 mt-3">
           {!isRemoved && (

@@ -10,6 +10,8 @@ const healthRoutes = require('./routes/health');
 const authRoutes = require('./routes/auth');
 const ownerRoutes = require('./routes/owner');
 const centerRoutes = require('./routes/center');
+const animalsRoutes = require('./routes/animals');
+const meRoutes = require('./routes/me');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -28,6 +30,8 @@ app.use('/api', healthRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/owner', ownerRoutes);
 app.use('/api/center', centerRoutes);
+app.use('/api/animals', animalsRoutes);
+app.use('/api/me', meRoutes);
 
 // ── Global error handler ──────────────────────────────────────────────────────
 // Catches anything thrown inside async route handlers (Express 5 propagates them)

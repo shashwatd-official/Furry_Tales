@@ -31,8 +31,16 @@ export const updateCenterProfile = (data) => api.patch('/center', data);
 export const uploadCenterPhoto = (formData) =>
   api.post('/center/photo', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 
-export const getAnimals = (status) =>
+// Adopter browsing (Phase 4)
+export const getBrowseAnimals = (params, signal) => api.get('/animals', { params, signal });
+export const getBrowseAnimal = (id) => api.get(`/animals/${id}`);
+
+// Center Admin (Phase 3)
+export const getCenterAnimals = (status) =>
   api.get(status ? `/center/animals?status=${status}` : '/center/animals');
+
+export const updateMyLocation = (data) => api.patch('/me/location', data);
+
 export const createAnimal = (formData) =>
   api.post('/center/animals', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 export const updateAnimal = (id, data) => api.patch(`/center/animals/${id}`, data);

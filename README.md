@@ -240,6 +240,36 @@ All routes require a logged-in `center_admin` with a center. Write routes (`PATC
 
 ---
 
+## 8. Adopter Browsing & Animals API Endpoints (Phase 4)
+
+Endpoints available for adopters and authenticated users:
+
+| Method | Path | Auth | Note |
+|---|---|---|---|
+| GET | `/api/animals` | `requireAuth` (any role) | Filtered browse with Haversine distance sorting. Strict query validation. `Cache-Control: no-store`. |
+| GET | `/api/animals/:id` | `requireAuth` (any role) | Animal detail view. UUID validation. `Cache-Control: no-store`. Returns 404 if not found or hidden. |
+| PATCH | `/api/me/location` | `requireAuth` + `adopter` | Update adopter location (`pincode`, optional `latitude`/`longitude`). Validates and updates user record. |
+
+### Visibility Rule
+An animal is visible to adopters **only** when `animal.status = 'available'` AND its center's status is `center.status = 'approved'`. No request parameter can override this rule.
+
+### Distance Utility & Unit Tests
+A pure Haversine distance calculator with Earth radius 6371 km is implemented in `server/src/utils/distance.js`.
+To run distance unit tests:
+```powershell
+cd server
+npm run test:distance
+```
+
+### Stock Photos
+Category and hero stock photos are located in `client/public/images/`:
+- `hero.jpg` — Hero section banner on Adopter Home
+- `dogs.jpg` — Dogs category card
+- `cats.jpg` — Cats category card
+- `other.jpg` — Other pets category card
+
+---
+
 ## Phases
 
 | Phase | Status |
@@ -248,9 +278,10 @@ All routes require a logged-in `center_admin` with a center. Write routes (`PATC
 | 1 — Auth, roles, split-panel UI, protected routes | ✅ Done |
 | Phase 2 — Owner panel: center approval | ✅ Done |
 | Phase 3 — Admin: animal listings with photo upload | ✅ Done |
-| 4 — Adopter browse: home, categories, distance | ⬜ Next |
+| Phase 4 — Adopter browse: home, categories, distance | ✅ Done |
 | 5 — Applications: form, review, status | ⬜ Pending |
 | 6 — Favorites | ⬜ Pending |
 | 7 — Food store, cart, orders | ⬜ Pending |
 | 8 — Security pass, animated login, deploy | ⬜ Pending |
+
 

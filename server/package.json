@@ -8,7 +8,8 @@
     "dev": "nodemon src/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
-    "seed:owner": "node prisma/seed.js"
+    "seed:owner": "node prisma/seed.js",
+    "test:distance": "node --test src/utils/distance.test.js"
   },
   "keywords": [],
   "author": "",

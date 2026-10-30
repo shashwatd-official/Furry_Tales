@@ -57,3 +57,19 @@ Animals are **never hard-deleted**. "Remove" sets `status = "removed"`. The phot
 - `POST /api/center/animals` always creates with `status = "available"`.
 - `PATCH /api/center/animals/:id/status` accepts `status` of `"adopted"` or `"available"` only when the animal is currently `"pending_pickup"`.
 - `DELETE /api/center/animals/:id` (soft remove) is blocked if the animal is `"pending_pickup"` — returns 409.
+
+---
+
+## Phase 4 decisions
+
+- **One photo per animal:** The same `photo_url` is used on the small card and, larger, in the detail panel. No galleries, carousels or thumbnail strips.
+- **Age filter values:** Whole months (`animals.age_months`, 0 to 360). Age band mapping: Any age (no filter), Under 1 year (0 to 11), 1 to under 3 years (12 to 35), 3 to under 8 years (36 to 95), 8 years and over (96 to 360).
+- **Visibility rule:** An animal is visible to adopters ONLY when `animal.status = 'available'` AND its center's status is `center.status = 'approved'`. No request parameter can override this.
+- **Animal fields sent to adopters:**
+  - List cards: `id`, `name`, `category`, `age_months`, `gender`, `size`, `photo_url`, `distance_km`, `center_name`, `center_city`.
+  - Detail panel: those same fields plus `breed`, `good_with_kids`, `good_with_pets`, `vaccinated`, `neutered`, `description`, `story`, `status`. Nothing else (no center contact details, no center id, no document paths, no other users' data).
+- **Detail view layout:** A full-width panel opened directly beneath the row of the clicked card (beneath the card itself on a one-column phone layout), so the order of cards never changes and no empty gaps appear.
+- **Actions in detail panel:** "Add to favorites" and "Fill adoption form" are displayed as disabled buttons with visible text "Coming soon" until Phases 5 and 6. The small cards have no heart icon yet.
+- **Food store card:** Displayed on the Home page as a non-clickable "Coming soon" card.
+- **Navigation:** Navigation links only to pages that exist (`/home` and `/animals`). No links for Favorites, Food Store, or My Applications.
+- **Center vs Adopter animal endpoints:** Center pages use only `/api/center/*` for animals. Adopter pages use only `/api/animals`. Never share one client helper between the two areas.

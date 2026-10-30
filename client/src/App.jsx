@@ -3,6 +3,7 @@ import { AuthProvider } from './context/AuthContext';
 import RootRoute from './components/RootRoute';
 import RequireRole from './components/RequireRole';
 import AdopterHome from './pages/AdopterHome';
+import AnimalsPage from './pages/AnimalsPage';
 import CenterDashboard from './pages/CenterDashboard';
 import CenterAnimalsPage from './pages/CenterAnimalsPage';
 import CenterAnimalFormPage from './pages/CenterAnimalFormPage';
@@ -23,6 +24,14 @@ function App() {
             element={
               <RequireRole allowedRoles={['adopter']}>
                 <AdopterHome />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/animals"
+            element={
+              <RequireRole allowedRoles={['adopter']}>
+                <AnimalsPage />
               </RequireRole>
             }
           />
