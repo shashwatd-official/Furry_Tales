@@ -9,7 +9,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
     "seed:owner": "node prisma/seed.js",
-    "test:distance": "node --test src/utils/distance.test.js"
+    "test:distance": "node --test src/utils/distance.test.js",
+    "test:applications": "node --test src/validators/application.validators.test.js"
   },
   "keywords": [],
   "author": "",

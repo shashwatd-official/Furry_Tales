@@ -52,5 +52,11 @@ export const replaceAnimalPhoto = (id, formData) =>
     headers: { 'Content-Type': 'multipart/form-data' },
   });
 
-export default api;
+// ── Adopter: Applications (Phase 5A) ────────────────────────────────────────
+// These helpers call /api/applications only and are NEVER shared with center pages.
 
+export const submitApplication = (data) => api.post('/applications', data);
+export const getMyApplications = () => api.get('/applications/mine');
+export const cancelApplication = (id) => api.patch(`/applications/${id}/cancel`);
+
+export default api;

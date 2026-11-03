@@ -4,7 +4,7 @@ import AdopterLayout from '../components/AdopterLayout';
 import SetLocationBanner from '../components/SetLocationBanner';
 import AnimalCard from '../components/AnimalCard';
 import AnimalDetailPanel from '../components/AnimalDetailPanel';
-import { getBrowseAnimals } from '../api';
+import { getBrowseAnimals, getMyApplications } from '../api';
 
 const AGE_BANDS = [
   { label: 'Any age', value: 'any', min: undefined, max: undefined },
@@ -27,6 +27,8 @@ export default function AnimalsPage() {
   const [selectedAnimalId, setSelectedAnimalId] = useState(null);
   const [offset, setOffset] = useState(0);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  // Phase 5A: Set of animal IDs for which the adopter has a pending application
+  const [pendingAnimalIds, setPendingAnimalIds] = useState(new Set());
 
   // Layout grid measurement for inserting detail panel below the clicked row
   const gridRef = useRef(null);
@@ -63,6 +65,21 @@ export default function AnimalsPage() {
   // Set document title
   useEffect(() => {
     document.title = 'Find a Friend | Furry Tales';
+  }, []);
+
+  // Phase 5A: Load the adopter's pending application animal IDs once on mount.
+  // Failures are silently ignored — the button simply won't show a warning if this fails.
+  useEffect(() => {
+    getMyApplications()
+      .then((res) => {
+        const ids = new Set(
+          (res.data.applications || [])
+            .filter((a) => a.status === 'pending')
+            .map((a) => a.animal.id)
+        );
+        setPendingAnimalIds(ids);
+      })
+      .catch(() => { /* silently ignore */ });
   }, []);
 
   // Update URL search parameters
@@ -473,6 +490,7 @@ export default function AnimalsPage() {
                       onClose={handleCloseDetail}
                       onAnimalUnavailable={handleAnimalUnavailable}
                       panelId={`detail-panel-${selectedAnimal.id}`}
+                      hasPendingApplication={pendingAnimalIds.has(selectedAnimal.id)}
                     />
                   )}
                 </div>

@@ -73,3 +73,63 @@ Animals are **never hard-deleted**. "Remove" sets `status = "removed"`. The phot
 - **Food store card:** Displayed on the Home page as a non-clickable "Coming soon" card.
 - **Navigation:** Navigation links only to pages that exist (`/home` and `/animals`). No links for Favorites, Food Store, or My Applications.
 - **Center vs Adopter animal endpoints:** Center pages use only `/api/center/*` for animals. Adopter pages use only `/api/animals`. Never share one client helper between the two areas.
+
+---
+
+## Phase 5A decisions
+
+- **Application form fields:** Exactly these sections, in order: Applicant Details (full name, phone, email prefilled, address, confirm age 18+), Home & Lifestyle (house or apartment, owned or rented, landlord permission if rented, outdoor space), Household (number of adults, children ages free-text, other pets free-text), Experience (pets owned before, hours alone daily), Motivation & Care (why adopting, who cares for pet, vet-care commitment), Consent (agree to home/center visit AND adoption policy). All required unless noted.
+- **Re-applying after rejection/cancellation:** An adopter may submit a new application after a previous application for the same animal became `rejected`, `not_selected`, or `cancelled`. The only block is an existing `pending` application for the same animal. The database unique index enforces this; the server maps Prisma P2002 error to HTTP 409.
+- **Email recipients:** Application-received confirmation → logged-in adopter's own account email. New-application notification → center's `contact_email` (loaded fresh from DB, never from the browser).
+- **Center contact details in applications:** Center address, phone, and contact_email are shown to an adopter ONLY inside an application whose status is `approved`. Not shown for pending, rejected, not_selected, or cancelled applications.
+- **Phone field:** Not prefilled. Adopter must type it in the form.
+- **Name and email fields:** Prefilled from the logged-in user's account data (`req.user.name`, `req.user.email`). Adopter may edit the name; email is read-only.
+- **No persistent form state:** The in-progress form lives in React component state only. No localStorage, no sessionStorage. If the page is refreshed, the form resets.
+- **Animal availability check:** `POST /api/applications` rejects with 409 if the animal's status is not `available` or its center's status is not `approved`. The check is done inside the database query (no two-step check-then-insert).
+- **Withdraw (cancel) rule:** Only the adopter who owns the application can cancel it, and only while it is `pending`. Status is set to `cancelled`. No email is sent on cancellation (adopter initiated it).
+- **"Fill adoption form" button:** Enabled in `AnimalDetailPanel` when the detail panel is loaded. Navigates to `/apply/:animalId`. A "pending application" indicator is shown if the adopter already has a pending application for that animal (detected from `GET /api/applications/mine` cached in the page).
+- **My Applications navigation link:** Added to `AdopterLayout` nav (desktop and mobile). It links to `/my-applications` and is visible now that the page exists.
+- **Scope:** Phase 5A covers only the adopter side. `GET /api/center/applications`, `PATCH /api/center/applications/:id/approve`, and `PATCH /api/center/applications/:id/reject` are NOT built in this phase (Phase 5B). The existing "PHASE 5" TODO comments in center animal code are left untouched.
+
+---
+
+## Phase 5A final application form fields
+
+These field names are final and canonical. They are used identically in the server's `form_data` Zod schema, the database's `form_data` JSON column, and the React form's payload. A mismatch is a 400.
+
+| Field | Server type | Rule |
+|---|---|---|
+| `full_name` | string | Required, trimmed, 2–100 chars |
+| `phone` | string | Required, trimmed, min 7 chars (auth rule, required) |
+| `email` | string | Required, valid RFC email, max 150, lowercased |
+| `address` | string | Required, trimmed, 5–300 chars |
+| `is_adult` | boolean | Must be literal `true` |
+| `home_type` | enum | `"house"` or `"apartment"` |
+| `ownership` | enum | `"owned"` or `"rented"` |
+| `landlord_permission` | boolean \| null | `true` or `false` when ownership = "rented"; `null` when "owned" |
+| `outdoor_space` | boolean | Required boolean (not a string "yes"/"no") |
+| `adults_count` | integer | Real JS number (no string coerce), integer, 1–20 |
+| `children` | string | Required, trimmed, 1–100 chars; write "none" if no children |
+| `other_pets` | string | Required, trimmed, 1–300 chars; write "none" if no pets |
+| `had_pets_before` | boolean | Required boolean |
+| `pet_details` | string \| null | Required, non-empty, max 300 when `had_pets_before = true`; `null` otherwise |
+| `hours_alone` | integer | Real JS number, integer, 0–24 |
+| `reason` | string | Required, trimmed, 20–1000 chars |
+| `caregiver` | string | Required, trimmed, 5–300 chars |
+| `vet_commitment` | boolean | Must be literal `true` (checkbox, not free-text) |
+| `consent_visit` | boolean | Must be literal `true` |
+| `consent_policy` | boolean | Must be literal `true` |
+
+### Decisions from the Phase 5A fix (2026-11-03)
+
+- **Nested body structure:** The server now expects `{ animal_id, form_data: {...} }` at the top level (strict — unknown top-level keys → 400). Previously the body was flat; the flat structure caused every console `POST` to fail with 400.
+- **Children and other-pets fields:** Stay as free-text strings named `children` and `other_pets` (not yes/no toggles). Both are required and non-empty; the adopter writes "none" if inapplicable.
+- **Vet-care commitment:** Changed back to a required boolean checkbox (`vet_commitment: true`). The previous textarea is removed from both the form and the server schema.
+- **Landlord permission:** Changed from string enum ("yes"/"no"/"na") to a real boolean (`true`/`false`) when rented, or `null` when owned.
+- **Outdoor space:** Changed from string enum ("yes"/"no") to a real boolean.
+- **No string coercion:** `adults_count` and `hours_alone` reject string values like `"2"`. The React form must send `Number(...)` explicitly.
+- **Withdraw (cancel):** Now a single atomic `updateMany` with all three conditions in the `WHERE` clause. This prevents a race condition in Phase 5B where a center could approve an application at the same time the adopter cancels it.
+- **Cancelled vs Withdrawn:** The status value in the database is `cancelled`. The UI label is "Cancelled" (not "Withdrawn") with a ✕ icon. The withdraw button still says "Withdraw application".
+- **Pending indicator in detail panel:** Changed from plain text to a link ("You've applied: view your application") pointing to `/my-applications`.
+- **Focus management:** When a step is blocked by validation, the browser moves focus to the first invalid field, which also has `aria-invalid` and `aria-describedby` set.
+

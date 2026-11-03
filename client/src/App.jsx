@@ -4,6 +4,8 @@ import RootRoute from './components/RootRoute';
 import RequireRole from './components/RequireRole';
 import AdopterHome from './pages/AdopterHome';
 import AnimalsPage from './pages/AnimalsPage';
+import AdopterApplicationFormPage from './pages/AdopterApplicationFormPage';
+import MyApplicationsPage from './pages/MyApplicationsPage';
 import CenterDashboard from './pages/CenterDashboard';
 import CenterAnimalsPage from './pages/CenterAnimalsPage';
 import CenterAnimalFormPage from './pages/CenterAnimalFormPage';
@@ -32,6 +34,22 @@ function App() {
             element={
               <RequireRole allowedRoles={['adopter']}>
                 <AnimalsPage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/apply/:animalId"
+            element={
+              <RequireRole allowedRoles={['adopter']}>
+                <AdopterApplicationFormPage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/my-applications"
+            element={
+              <RequireRole allowedRoles={['adopter']}>
+                <MyApplicationsPage />
               </RequireRole>
             }
           />

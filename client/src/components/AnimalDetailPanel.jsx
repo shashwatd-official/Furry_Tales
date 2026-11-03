@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { getBrowseAnimal } from '../api';
 import { formatAge, formatDistance } from '../utils/formatters';
 
@@ -14,7 +15,9 @@ export default function AnimalDetailPanel({
   onClose,
   onAnimalUnavailable,
   panelId,
+  hasPendingApplication,  // Phase 5A: true if adopter already has a pending application for this animal
 }) {
+  const navigate = useNavigate();
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -250,20 +253,29 @@ export default function AnimalDetailPanel({
               )}
             </div>
 
-            {/* Actions for Phases 5 and 6 (structured for plugging real handlers later) */}
+            {/* Actions: Phase 5A — Fill adoption form is now live */}
             <div className="pt-4 border-t border-border flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                id="btn-fill-adoption-form"
-                disabled
-                aria-disabled="true"
-                className="px-6 py-2.5 rounded-xl bg-primary/40 text-white font-bold text-sm cursor-not-allowed flex items-center gap-2 min-h-[44px]"
-              >
-                <span>Fill adoption form</span>
-                <span className="text-[10px] font-normal uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-full">
-                  Coming soon
-                </span>
-              </button>
+              {hasPendingApplication ? (
+                <div className="flex-1 min-w-0">
+                  <Link
+                    to="/my-applications"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-warning/10 border border-warning/30 text-warning text-sm font-semibold hover:bg-warning/20 transition-colors"
+                  >
+                    <span aria-hidden="true">⏳</span>
+                    You've applied: view your application
+                  </Link>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  id="btn-fill-adoption-form"
+                  onClick={() => navigate(`/apply/${animalId}`)}
+                  className="px-6 py-2.5 rounded-xl bg-primary text-white font-bold text-sm hover:bg-primary-hover transition-colors flex items-center gap-2 min-h-[44px] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <span aria-hidden="true">📋</span>
+                  <span>Fill adoption form</span>
+                </button>
+              )}
 
               <button
                 type="button"

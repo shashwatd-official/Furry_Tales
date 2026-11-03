@@ -279,9 +279,101 @@ Category and hero stock photos are located in `client/public/images/`:
 | Phase 2 — Owner panel: center approval | ✅ Done |
 | Phase 3 — Admin: animal listings with photo upload | ✅ Done |
 | Phase 4 — Adopter browse: home, categories, distance | ✅ Done |
-| 5 — Applications: form, review, status | ⬜ Pending |
+| Phase 5A — Adopter applications: form, My Applications, emails | ✅ Done |
+| Phase 5B — Center admin: review and decide applications | ⬜ Pending |
 | 6 — Favorites | ⬜ Pending |
 | 7 — Food store, cart, orders | ⬜ Pending |
 | 8 — Security pass, animated login, deploy | ⬜ Pending |
 
+---
 
+## 9. Phase 5A — Adoption Applications (Adopter side)
+
+### New API endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/applications` | `requireAuth` + `adopter` | Submit a new adoption application. Body: `{ animal_id, form_data }`. Returns `{ id }` on success. |
+| GET | `/api/applications/mine` | `requireAuth` + `adopter` | List all own applications, newest first. Center contact details included only when `status = "approved"`. |
+| PATCH | `/api/applications/:id/cancel` | `requireAuth` + `adopter` | Withdraw a pending application. Atomic single-DB-update (race-condition safe). Returns `{ ok: true }`. |
+
+### Request body for POST /api/applications
+
+```json
+{
+  "animal_id": "REAL-ANIMAL-ID",
+  "form_data": {
+    "full_name":           "Jane Smith",
+    "phone":               "+91 98765 43210",
+    "email":               "jane@example.com",
+    "address":             "12 Elm Street, Mumbai",
+    "is_adult":            true,
+    "home_type":           "apartment",
+    "ownership":           "rented",
+    "landlord_permission": true,
+    "outdoor_space":       false,
+    "adults_count":        2,
+    "children":            "none",
+    "other_pets":          "none",
+    "had_pets_before":     true,
+    "pet_details":         "1 dog for 5 years",
+    "hours_alone":         4,
+    "reason":              "I have always wanted to give a rescue animal a loving home.",
+    "caregiver":           "Myself",
+    "vet_commitment":      true,
+    "consent_visit":       true,
+    "consent_policy":      true
+  }
+}
+```
+
+### Final form_data field list and rules
+
+| Field | Type | Rule |
+|---|---|---|
+| `full_name` | string | Required, trimmed, 2–100 chars |
+| `phone` | string | Required, trimmed, min 7 chars (same rule as auth signup) |
+| `email` | string | Required, valid RFC email, max 150 chars, lowercased |
+| `address` | string | Required, trimmed, 5–300 chars |
+| `is_adult` | boolean | Must be literal `true` |
+| `home_type` | enum | `"house"` or `"apartment"` |
+| `ownership` | enum | `"owned"` or `"rented"` |
+| `landlord_permission` | boolean \| null | **boolean** when `ownership = "rented"`; **null** (or omitted) when `"owned"` |
+| `outdoor_space` | boolean | Required boolean |
+| `adults_count` | integer | Real number (not string), integer, 1–20 |
+| `children` | string | Required, trimmed, 1–100 chars; write "none" if none |
+| `other_pets` | string | Required, trimmed, 1–300 chars; write "none" if none |
+| `had_pets_before` | boolean | Required boolean |
+| `pet_details` | string \| null | Required non-empty string (max 300) when `had_pets_before = true`; `null` otherwise |
+| `hours_alone` | integer | Real number, integer, 0–24 |
+| `reason` | string | Required, trimmed, 20–1000 chars |
+| `caregiver` | string | Required, trimmed, 5–300 chars |
+| `vet_commitment` | boolean | Must be literal `true` |
+| `consent_visit` | boolean | Must be literal `true` |
+| `consent_policy` | boolean | Must be literal `true` |
+
+> **Strict validation:** The `form_data` object rejects any unknown keys with HTTP 400. No loose coercion — number fields must be sent as JS numbers, boolean fields as booleans.
+
+### Email behaviour
+
+Two emails are sent **after** a successful database save. Email failures are caught and never block the HTTP response.
+
+| Recipient | When | Content |
+|---|---|---|
+| Adopter's account email | Application submitted | Confirms receipt; names the animal and center; links to My Applications |
+| Center's `contact_email` | Application submitted | Names the applicant (`full_name`) and the animal; links to the center dashboard. Skipped if center has no `contact_email`. |
+
+No email is sent when a user withdraws an application.
+
+### Pickup / contact details rule
+
+Center contact details (`address`, `phone`, `contact_email`) are **only included** in the `GET /api/applications/mine` response when the application `status = "approved"`. They are `undefined` (omitted) in all other statuses.
+
+### Test suite
+
+```powershell
+cd server
+npm run test:applications
+```
+
+Runs 15 tests (1 valid body + 14 rejection cases) using Node's built-in `node:test`. No extra packages needed.

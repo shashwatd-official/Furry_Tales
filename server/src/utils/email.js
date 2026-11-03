@@ -166,9 +166,95 @@ The Furry Tales Team`;
   return { subject, text, html };
 }
 
+/**
+ * Email Template: Application received — sent to the ADOPTER as confirmation.
+ */
+function getApplicationReceivedAdopterEmail({ adopterName, animalName, centerName }) {
+  const safeName = escapeHtml(adopterName);
+  const safeAnimal = escapeHtml(animalName);
+  const safeCenter = escapeHtml(centerName);
+
+  const subject = `Your adoption application for ${animalName} has been received!`;
+
+  const text = `Hi ${adopterName},
+
+Thank you for submitting an adoption application for ${animalName} at ${centerName}.
+
+Your application is now pending review. The center team will be in touch once they have had a chance to review it.
+
+You can track your application status at any time under "My Applications" on Furry Tales.
+
+Warmly,
+The Furry Tales Team`;
+
+  const html = `<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333333; margin: 0; padding: 24px;">
+  <div style="max-width: 560px; margin: 0 auto; background: #ffffff; padding: 28px; border: 1px solid #e5e7eb; border-radius: 8px;">
+    <h2 style="color: #A95032; margin-top: 0;">Application Received! 🐾</h2>
+    <p>Hi ${safeName},</p>
+    <p>Thank you for submitting an adoption application for <strong>${safeAnimal}</strong> at <strong>${safeCenter}</strong>.</p>
+    <p>Your application is now <strong>pending review</strong>. The center team will be in touch once they have had a chance to review it.</p>
+    <div style="margin: 24px 0;">
+      <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/my-applications" style="background: #A95032; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 6px; font-weight: bold; display: inline-block;">View My Applications</a>
+    </div>
+    <p style="color: #666666; font-size: 14px; margin-top: 24px;">Warmly,<br/>The Furry Tales Team</p>
+  </div>
+</body>
+</html>`;
+
+  return { subject, text, html };
+}
+
+/**
+ * Email Template: New application notification — sent to the CENTER's contact email.
+ */
+function getApplicationReceivedCenterEmail({ centerName, animalName, adopterName, adopterEmail }) {
+  const safeCenter = escapeHtml(centerName);
+  const safeAnimal = escapeHtml(animalName);
+  const safeAdopter = escapeHtml(adopterName);
+  const safeAdopterEmail = escapeHtml(adopterEmail);
+
+  const subject = `New adoption application for ${animalName} on Furry Tales`;
+
+  const text = `Hi ${centerName} team,
+
+A new adoption application has been submitted for ${animalName}.
+
+Applicant: ${adopterName} (${adopterEmail})
+
+Please sign in to your Furry Tales dashboard to review the application.
+
+Warmly,
+The Furry Tales Team`;
+
+  const html = `<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333333; margin: 0; padding: 24px;">
+  <div style="max-width: 560px; margin: 0 auto; background: #ffffff; padding: 28px; border: 1px solid #e5e7eb; border-radius: 8px;">
+    <h2 style="color: #355C4A; margin-top: 0;">New Adoption Application</h2>
+    <p>Hi <strong>${safeCenter}</strong> team,</p>
+    <p>A new adoption application has been submitted for <strong>${safeAnimal}</strong>.</p>
+    <table style="border-collapse: collapse; width: 100%; margin: 16px 0;">
+      <tr><td style="padding: 6px 0; color: #666;">Applicant</td><td style="padding: 6px 0; font-weight: bold;">${safeAdopter}</td></tr>
+      <tr><td style="padding: 6px 0; color: #666;">Email</td><td style="padding: 6px 0;">${safeAdopterEmail}</td></tr>
+    </table>
+    <div style="margin: 24px 0;">
+      <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/center" style="background: #355C4A; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 6px; font-weight: bold; display: inline-block;">Go to Dashboard</a>
+    </div>
+    <p style="color: #666666; font-size: 14px; margin-top: 24px;">Warmly,<br/>The Furry Tales Team</p>
+  </div>
+</body>
+</html>`;
+
+  return { subject, text, html };
+}
+
 module.exports = {
   sendEmail,
   escapeHtml,
   getCenterApprovedEmail,
   getCenterRejectedEmail,
+  getApplicationReceivedAdopterEmail,
+  getApplicationReceivedCenterEmail,
 };

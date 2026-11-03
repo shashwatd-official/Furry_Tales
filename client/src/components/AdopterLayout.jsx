@@ -20,6 +20,7 @@ export default function AdopterLayout({ children }) {
   const navLinks = [
     { to: '/home', label: 'Home', id: 'nav-home-link' },
     { to: '/animals', label: 'Find a Friend', id: 'nav-animals-link' },
+    { to: '/my-applications', label: 'My Applications', id: 'nav-my-applications-link' },
   ];
 
   return (
