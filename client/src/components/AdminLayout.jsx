@@ -22,8 +22,8 @@ export default function AdminLayout({ children, centerName }) {
 
   const navItems = [
     { to: '/center/animals', label: 'Animals', icon: '🐾' },
+    { to: '/center/applications', label: 'Applications', icon: '📋' },
     { to: '/center/profile', label: 'Center Profile', icon: '🏢' },
-    // No Applications link — Phase 5
   ];
 
   const linkClass = ({ isActive }) =>

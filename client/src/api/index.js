@@ -59,4 +59,16 @@ export const submitApplication = (data) => api.post('/applications', data);
 export const getMyApplications = () => api.get('/applications/mine');
 export const cancelApplication = (id) => api.patch(`/applications/${id}/cancel`);
 
+// ── Center Admin: Applications (Phase 5B) ────────────────────────────────────
+// These helpers call /api/center/* only and are NEVER shared with adopter pages.
+
+export const getCenterApplications = (status) =>
+  api.get('/center/applications', { params: status ? { status } : {} });
+
+export const approveCenterApplication = (id, note) =>
+  api.patch(`/center/applications/${id}/approve`, { note });
+
+export const rejectCenterApplication = (id, note) =>
+  api.patch(`/center/applications/${id}/reject`, { note });
+
 export default api;

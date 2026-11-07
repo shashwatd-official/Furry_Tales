@@ -280,7 +280,7 @@ Category and hero stock photos are located in `client/public/images/`:
 | Phase 3 — Admin: animal listings with photo upload | ✅ Done |
 | Phase 4 — Adopter browse: home, categories, distance | ✅ Done |
 | Phase 5A — Adopter applications: form, My Applications, emails | ✅ Done |
-| Phase 5B — Center admin: review and decide applications | ⬜ Pending |
+| Phase 5B — Center admin: review and decide applications | ✅ Done |
 | 6 — Favorites | ⬜ Pending |
 | 7 — Food store, cart, orders | ⬜ Pending |
 | 8 — Security pass, animated login, deploy | ⬜ Pending |
@@ -377,3 +377,77 @@ npm run test:applications
 ```
 
 Runs 15 tests (1 valid body + 14 rejection cases) using Node's built-in `node:test`. No extra packages needed.
+
+---
+
+## 10. Phase 5B — Adoption Applications (Center admin side)
+
+### New API endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/api/center/applications` | `requireCenterAdmin` | List own center's applications. Query param `status` = `pending\|approved\|rejected\|not_selected\|cancelled\|all` (default `pending`). Returns `counts` object with per-status totals and `competing_pending_count` on each pending application. Max 200 results per call. |
+| PATCH | `/api/center/applications/:id/approve` | `requireCenterAdmin` | Approve a pending application. Body: `{ note? }` (string ≤ 500 chars, optional). Runs ONE `$transaction`: (1) verifies animal belongs to center and is `available`; (2) sets animal to `pending_pickup`; (3) sets application to `approved`; (4) sets all other pending applications for the same animal to `not_selected`. Post-commit emails to approved applicant and all not-selected applicants. |
+| PATCH | `/api/center/applications/:id/reject` | `requireCenterAdmin` | Reject a pending application. Body: `{ note? }`. Single atomic `updateMany` (WHERE `status=pending` + animal's center). Post-commit email to rejected applicant. |
+
+> **center_id is never taken from the request.** It always comes from `req.center.id` (set by `requireCenterAdmin`, loaded fresh from DB on every request). Every query includes `center_id = req.center.id` in its WHERE clause.
+
+### "Return to available" transaction (updateAnimalStatus in center.controller.js)
+
+When a center admin changes an animal's status from `pending_pickup` → `available` (via the existing `PATCH /api/center/animals/:id/status`), the following happens inside **one Prisma `$transaction`**:
+
+1. Read the animal (name + current status) — guards against race.
+2. `animal.update` — sets status to `available`.
+3. `application.updateMany` — cancels all `approved` applications for that animal (status → `cancelled`).
+
+After the transaction commits, each cancelled applicant receives a `getApplicationCancelledByCenterEmail` email. Email failures are caught and never roll back anything.
+
+### Approve transaction order (correctness guarantee)
+
+The approve transaction deliberately updates the **animal first** (step 2 above), then the application (step 3), then not-selected (step 4). This means two simultaneous approve calls for the same animal will both attempt `updateMany` on `animals WHERE status='available'` — only one will succeed; the second sees 0 rows updated and aborts with 409 (race condition safely handled).
+
+### Status-change rules
+
+| Animal status | Application status set by | Rule |
+|---|---|---|
+| `available` → `pending_pickup` | Approve action | Atomic; only possible if animal is `available` |
+| `pending_pickup` → `available` | "Return to available" | Atomic; approved application cancelled; not-selected are **not** restored |
+| `pending_pickup` → `adopted` | "Mark as adopted" | Atomic; approved application stays `approved`; no email |
+| `available` → `removed` | Remove animal (Phase 5C, not yet built) | Existing comment left in place |
+
+### Application status set by center admin
+
+| Transition | Triggered by | Emails sent |
+|---|---|---|
+| `pending` → `approved` | Approve action | Approved applicant (with center contact details + optional note) |
+| `pending` → `not_selected` | Auto on approve (all other pending apps for same animal) | Each not-selected applicant |
+| `pending` → `rejected` | Reject action | Rejected applicant (optional note, no center contact) |
+| `approved` → `cancelled` | "Return to available" | Cancelled applicant (no center contact) |
+
+### Email templates added (Phase 5B)
+
+| Builder | Recipient | Note |
+|---|---|---|
+| `getApplicationApprovedEmail` | Approved applicant | Includes center address, phone, contact\_email, optional admin note |
+| `getApplicationRejectedEmail` | Rejected applicant | Includes optional admin note; no center contact details |
+| `getApplicationNotSelectedEmail` | Not-selected applicant | No center contact details, no note |
+| `getApplicationCancelledByCenterEmail` | Cancelled (return-to-available) applicant | No center contact details |
+
+All builders HTML-escape every user-supplied value. Email failures are caught with `.catch(() => {})` and never block or roll back any action.
+
+### No adopter account details returned to center admin
+
+The `GET /api/center/applications` response **never** includes `user_id`, `password_hash`, or the adopter's login email. Only `form_data.full_name`, `form_data.phone`, and `form_data.email` (from the application form itself) are visible to the center admin.
+
+### Test suite
+
+```powershell
+cd server
+npm run test:phase5b
+```
+
+Runs **45 tests** across two files:
+- `src/validators/centerApplications.validators.test.js` — 21 tests (query schema, UUID param, note body, strict mode)
+- `src/utils/email.test.js` — 24 tests (all 4 email builders: non-empty outputs, XSS escaping, presence/absence of center contact details)
+
+Uses Node's built-in `node:test` only. No extra packages needed. Schema.prisma was **not changed** and no migration was created.

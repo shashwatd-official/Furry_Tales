@@ -10,7 +10,8 @@
     "prisma:migrate": "prisma migrate deploy",
     "seed:owner": "node prisma/seed.js",
     "test:distance": "node --test src/utils/distance.test.js",
-    "test:applications": "node --test src/validators/application.validators.test.js"
+    "test:applications": "node --test src/validators/application.validators.test.js",
+    "test:phase5b": "node --test src/validators/centerApplications.validators.test.js src/utils/email.test.js"
   },
   "keywords": [],
   "author": "",

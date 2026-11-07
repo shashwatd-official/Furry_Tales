@@ -12,6 +12,7 @@ const {
   updateAnimalStatus,
   replaceAnimalPhoto,
 } = require('../controllers/center.controller');
+const centerApplicationsRouter = require('./centerApplications');
 
 const router = express.Router();
 
@@ -36,5 +37,10 @@ router.patch('/animals/:id', requireApprovedCenter, updateAnimal);
 router.delete('/animals/:id', requireApprovedCenter, removeAnimal);
 router.patch('/animals/:id/status', requireApprovedCenter, updateAnimalStatus);
 router.post('/animals/:id/photos', requireApprovedCenter, singlePhotoUpload, replaceAnimalPhoto);
+
+// ── Applications (Phase 5B) ────────────────────────────────────────────────────
+// requireCenterAdmin is already applied above via router.use().
+// requireApprovedCenter is applied per-route inside centerApplicationsRouter.
+router.use('/applications', centerApplicationsRouter);
 
 module.exports = router;

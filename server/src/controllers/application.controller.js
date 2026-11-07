@@ -15,7 +15,7 @@ const {
 //
 // Check order:
 //   1. Validate body (400 on any violation)
-//   2. Look up animal — must be available at an approved center (409 if not)
+//   2. Look up animal — must exist, be 'available', at an 'approved' center (404 if not)
 //   3. Create application (catch P2002 unique violation → 409)
 //   4. Fire emails asynchronously (failures never block the response)
 // ---------------------------------------------------------------------------
@@ -53,9 +53,7 @@ async function submitApplication(req, res) {
   });
 
   if (!animal) {
-    return res.status(409).json({
-      error: 'This animal is no longer available for adoption.',
-    });
+    return res.status(404).json({ error: 'Animal not found.' });
   }
 
   // 3. Create the application.

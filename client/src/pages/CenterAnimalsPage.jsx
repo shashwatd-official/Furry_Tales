@@ -172,7 +172,12 @@ export default function CenterAnimalsPage() {
       load();
     } catch (err) {
       const msg = err.response?.data?.error || 'Failed to update status.';
-      setFeedback({ type: 'error', text: msg });
+      if (err.response?.status === 409) {
+        setFeedback({ type: 'warning', text: 'Could not update status: ' + msg + ' The list has been refreshed.' });
+        load();
+      } else {
+        setFeedback({ type: 'error', text: msg });
+      }
       setModal(null);
     } finally {
       setActionLoading(false);
@@ -377,7 +382,7 @@ export default function CenterAnimalsPage() {
       <ConfirmModal
         open={modal?.type === 'adopted'}
         title="Mark as adopted?"
-        description={`Confirm that "${modal?.animal?.name}" has been picked up and adopted.`}
+        description={`Confirm that "${modal?.animal?.name}" has been picked up and adopted. The approved application stays approved — no changes are made to any application.`}
         confirmLabel="Mark as adopted"
         confirmClass="bg-admin-accent hover:bg-admin-accent/90"
         onConfirm={() => handleStatusChange(modal.animal, 'adopted')}
@@ -389,7 +394,7 @@ export default function CenterAnimalsPage() {
       <ConfirmModal
         open={modal?.type === 'available'}
         title="Return to available?"
-        description={`"${modal?.animal?.name}" will be listed as available again for adoption.`}
+        description={`"${modal?.animal?.name}" will be listed as available again. The approved applicant's application will be cancelled and they will be emailed. Applicants marked "Not selected" are not restored — they can apply again when the animal is listed. The animal will appear in browse results.`}
         confirmLabel="Return to available"
         confirmClass="bg-admin-accent hover:bg-admin-accent/90"
         onConfirm={() => handleStatusChange(modal.animal, 'available')}

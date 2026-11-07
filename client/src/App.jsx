@@ -10,6 +10,7 @@ import CenterDashboard from './pages/CenterDashboard';
 import CenterAnimalsPage from './pages/CenterAnimalsPage';
 import CenterAnimalFormPage from './pages/CenterAnimalFormPage';
 import CenterProfilePage from './pages/CenterProfilePage';
+import CenterApplicationsPage from './pages/CenterApplicationsPage';
 import OwnerPanel from './pages/OwnerPanel';
 
 function App() {
@@ -84,6 +85,14 @@ function App() {
             element={
               <RequireRole allowedRoles={['center_admin']}>
                 <CenterAnimalFormPage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/center/applications"
+            element={
+              <RequireRole allowedRoles={['center_admin']}>
+                <CenterApplicationsPage />
               </RequireRole>
             }
           />

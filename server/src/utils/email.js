@@ -250,6 +250,222 @@ The Furry Tales Team`;
   return { subject, text, html };
 }
 
+// ---------------------------------------------------------------------------
+// Phase 5B email templates — application decision emails
+// ---------------------------------------------------------------------------
+
+/**
+ * Email Template: Application approved
+ * Sent to the APPROVED APPLICANT's account email.
+ * Includes: congratulations, animal name, center name, center address/phone/contact_email,
+ * the optional note, and an instruction to contact the center to arrange pickup.
+ * HTML-escapes all user-supplied values (names, center details, notes).
+ */
+function getApplicationApprovedEmail({
+  adopterName,
+  animalName,
+  centerName,
+  centerAddress,
+  centerPhone,
+  centerContactEmail,
+  note,
+}) {
+  const safeName   = escapeHtml(adopterName);
+  const safeAnimal = escapeHtml(animalName);
+  const safeCenter = escapeHtml(centerName);
+  const safeAddr   = escapeHtml(centerAddress  || '');
+  const safePhone  = escapeHtml(centerPhone    || '');
+  const safeCEmail = escapeHtml(centerContactEmail || '');
+  const safeNote   = note ? escapeHtml(note) : null;
+
+  const subject = `Great news — your application for ${animalName} has been approved!`;
+
+  const noteTextBlock = note
+    ? `\nNote from the center:\n"${note}"\n`
+    : '';
+  const noteHtmlBlock = safeNote
+    ? `<div style="background:#F3FDF6;border-left:4px solid #28784A;padding:12px 16px;margin:16px 0;border-radius:4px;color:#1a5a35;">
+        <strong>Note from the center:</strong><br/>${safeNote}
+       </div>`
+    : '';
+
+  const text = `Hi ${adopterName},
+
+Wonderful news! Your adoption application for ${animalName} at ${centerName} has been approved. 🎉
+
+Please contact the center to arrange a pickup time:
+  Center: ${centerName}${safeAddr ? '\n  Address: ' + centerAddress : ''}${centerPhone ? '\n  Phone: ' + centerPhone : ''}${centerContactEmail ? '\n  Email: ' + centerContactEmail : ''}
+${noteTextBlock}
+We wish you and ${animalName} many happy years together!
+
+Warmly,
+The Furry Tales Team`;
+
+  const html = `<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333333; margin: 0; padding: 24px;">
+  <div style="max-width: 560px; margin: 0 auto; background: #ffffff; padding: 28px; border: 1px solid #e5e7eb; border-radius: 8px;">
+    <h2 style="color: #28784A; margin-top: 0;">Your adoption is approved! 🎉</h2>
+    <p>Hi ${safeName},</p>
+    <p>Wonderful news! Your adoption application for <strong>${safeAnimal}</strong> at <strong>${safeCenter}</strong> has been <strong>approved</strong>.</p>
+    <p>Please contact the center to arrange a pickup time:</p>
+    <table style="border-collapse: collapse; width: 100%; margin: 12px 0;">
+      <tr><td style="padding: 4px 0; color: #666; width: 110px;">Center</td><td style="padding: 4px 0; font-weight: bold;">${safeCenter}</td></tr>
+      ${safeAddr   ? `<tr><td style="padding: 4px 0; color: #666;">Address</td><td style="padding: 4px 0;">${safeAddr}</td></tr>` : ''}
+      ${safePhone  ? `<tr><td style="padding: 4px 0; color: #666;">Phone</td><td style="padding: 4px 0;">${safePhone}</td></tr>` : ''}
+      ${safeCEmail ? `<tr><td style="padding: 4px 0; color: #666;">Email</td><td style="padding: 4px 0;">${safeCEmail}</td></tr>` : ''}
+    </table>
+    ${noteHtmlBlock}
+    <p>We wish you and <strong>${safeAnimal}</strong> many happy years together!</p>
+    <div style="margin: 24px 0;">
+      <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/my-applications" style="background: #28784A; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 6px; font-weight: bold; display: inline-block;">View My Applications</a>
+    </div>
+    <p style="color: #666666; font-size: 14px; margin-top: 24px;">Warmly,<br/>The Furry Tales Team</p>
+  </div>
+</body>
+</html>`;
+
+  return { subject, text, html };
+}
+
+/**
+ * Email Template: Application rejected
+ * Sent to the REJECTED APPLICANT's account email.
+ * Includes: sorry message, animal name, center name, optional note.
+ */
+function getApplicationRejectedEmail({ adopterName, animalName, centerName, note }) {
+  const safeName   = escapeHtml(adopterName);
+  const safeAnimal = escapeHtml(animalName);
+  const safeCenter = escapeHtml(centerName);
+  const safeNote   = note ? escapeHtml(note) : null;
+
+  const subject = `Update on your application for ${animalName}`;
+
+  const noteTextBlock = note ? `\nNote from the center:\n"${note}"\n` : '';
+  const noteHtmlBlock = safeNote
+    ? `<div style="background:#FFF4F2;border-left:4px solid #A95032;padding:12px 16px;margin:16px 0;border-radius:4px;color:#7F2315;">
+        <strong>Note from the center:</strong><br/>${safeNote}
+       </div>`
+    : '';
+
+  const text = `Hi ${adopterName},
+
+Thank you for your interest in adopting ${animalName} from ${centerName}.
+
+After reviewing your application, the center has decided not to proceed with your application at this time.
+${noteTextBlock}
+We encourage you to browse other animals available for adoption — your perfect companion may be waiting!
+
+Warmly,
+The Furry Tales Team`;
+
+  const html = `<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333333; margin: 0; padding: 24px;">
+  <div style="max-width: 560px; margin: 0 auto; background: #ffffff; padding: 28px; border: 1px solid #e5e7eb; border-radius: 8px;">
+    <h2 style="color: #A95032; margin-top: 0;">Application Update</h2>
+    <p>Hi ${safeName},</p>
+    <p>Thank you for your interest in adopting <strong>${safeAnimal}</strong> from <strong>${safeCenter}</strong>.</p>
+    <p>After reviewing your application, the center has decided not to proceed with it at this time.</p>
+    ${noteHtmlBlock}
+    <p>We encourage you to browse other animals available for adoption — your perfect companion may be waiting!</p>
+    <div style="margin: 24px 0;">
+      <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/animals" style="background: #A95032; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 6px; font-weight: bold; display: inline-block;">Browse Animals</a>
+    </div>
+    <p style="color: #666666; font-size: 14px; margin-top: 24px;">Warmly,<br/>The Furry Tales Team</p>
+  </div>
+</body>
+</html>`;
+
+  return { subject, text, html };
+}
+
+/**
+ * Email Template: Not selected
+ * Sent to applicants whose applications are marked 'not_selected' because
+ * another applicant was approved for the same animal.
+ * Never includes center contact details.
+ */
+function getApplicationNotSelectedEmail({ adopterName, animalName }) {
+  const safeName   = escapeHtml(adopterName);
+  const safeAnimal = escapeHtml(animalName);
+
+  const subject = `Update on your application for ${animalName}`;
+
+  const text = `Hi ${adopterName},
+
+Thank you so much for applying to adopt ${animalName} through Furry Tales.
+
+Another applicant was selected for ${animalName}. We know this is disappointing news, and we genuinely appreciate you opening your heart to give an animal a home.
+
+There are many other wonderful animals looking for loving families — please do browse other animals available for adoption!
+
+Warmly,
+The Furry Tales Team`;
+
+  const html = `<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333333; margin: 0; padding: 24px;">
+  <div style="max-width: 560px; margin: 0 auto; background: #ffffff; padding: 28px; border: 1px solid #e5e7eb; border-radius: 8px;">
+    <h2 style="color: #A95032; margin-top: 0;">Application Update</h2>
+    <p>Hi ${safeName},</p>
+    <p>Thank you so much for applying to adopt <strong>${safeAnimal}</strong> through Furry Tales.</p>
+    <p>Another applicant was selected for <strong>${safeAnimal}</strong>. We know this is disappointing, and we genuinely appreciate you opening your heart to give an animal a home.</p>
+    <p>There are many other wonderful animals looking for loving families — please do browse other animals available for adoption!</p>
+    <div style="margin: 24px 0;">
+      <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/animals" style="background: #A95032; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 6px; font-weight: bold; display: inline-block;">Browse Animals</a>
+    </div>
+    <p style="color: #666666; font-size: 14px; margin-top: 24px;">Warmly,<br/>The Furry Tales Team</p>
+  </div>
+</body>
+</html>`;
+
+  return { subject, text, html };
+}
+
+/**
+ * Email Template: Application cancelled by center (return to available)
+ * Sent to the applicant whose APPROVED application was cancelled when the
+ * admin returned the animal from pending_pickup to available.
+ * Never includes center contact details.
+ */
+function getApplicationCancelledByCenterEmail({ adopterName, animalName }) {
+  const safeName   = escapeHtml(adopterName);
+  const safeAnimal = escapeHtml(animalName);
+
+  const subject = `Update on your adoption of ${animalName}`;
+
+  const text = `Hi ${adopterName},
+
+We're writing to let you know that the pickup for ${animalName} did not go ahead, and ${animalName} is being returned to our available animals list.
+
+Your application has been cancelled as a result. If ${animalName} is listed again in the future, you are welcome to apply again.
+
+We're sorry for the inconvenience, and we hope you'll find your perfect companion soon.
+
+Warmly,
+The Furry Tales Team`;
+
+  const html = `<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333333; margin: 0; padding: 24px;">
+  <div style="max-width: 560px; margin: 0 auto; background: #ffffff; padding: 28px; border: 1px solid #e5e7eb; border-radius: 8px;">
+    <h2 style="color: #946200; margin-top: 0;">Adoption Update</h2>
+    <p>Hi ${safeName},</p>
+    <p>We're writing to let you know that the pickup for <strong>${safeAnimal}</strong> did not go ahead, and <strong>${safeAnimal}</strong> is being returned to the available animals list.</p>
+    <p>Your application has been cancelled as a result. If <strong>${safeAnimal}</strong> is listed again, you are very welcome to apply again.</p>
+    <p>We're sorry for the inconvenience, and we hope you'll find your perfect companion soon!</p>
+    <div style="margin: 24px 0;">
+      <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/animals" style="background: #A95032; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 6px; font-weight: bold; display: inline-block;">Browse Animals</a>
+    </div>
+    <p style="color: #666666; font-size: 14px; margin-top: 24px;">Warmly,<br/>The Furry Tales Team</p>
+  </div>
+</body>
+</html>`;
+
+  return { subject, text, html };
+}
+
 module.exports = {
   sendEmail,
   escapeHtml,
@@ -257,4 +473,8 @@ module.exports = {
   getCenterRejectedEmail,
   getApplicationReceivedAdopterEmail,
   getApplicationReceivedCenterEmail,
+  getApplicationApprovedEmail,
+  getApplicationRejectedEmail,
+  getApplicationNotSelectedEmail,
+  getApplicationCancelledByCenterEmail,
 };

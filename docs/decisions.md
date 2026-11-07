@@ -133,3 +133,49 @@ These field names are final and canonical. They are used identically in the serv
 - **Pending indicator in detail panel:** Changed from plain text to a link ("You've applied: view your application") pointing to `/my-applications`.
 - **Focus management:** When a step is blocked by validation, the browser moves focus to the first invalid field, which also has `aria-invalid` and `aria-describedby` set.
 
+
+---
+
+## Phase 5B decisions
+
+These override the docs where they differ.
+
+- **Application status and animal status are different things.** They are always shown separately in the UI and in API responses. The animal's status changes when an application is approved (animal → pending_pickup) or when the admin returns the animal to available (animal → available). The application's status changes independently.
+
+- **Sort order:** Pending applications list is sorted oldest first (so the admin sees the most urgent/earliest first). Every other status list is sorted newest first.
+
+- **Approving an application (atomic transaction):**
+  1. Update animal: `WHERE id = animal_id AND center_id = req.center.id AND status = 'available'` → `status = 'pending_pickup'`. This runs FIRST to take a database lock. If 0 rows change, abort with 409 "This animal is no longer available, so this application can't be approved."
+  2. Update the application: `WHERE id AND center_id AND status = 'pending'` → `status = 'approved'`. If 0 rows change (adopter withdrew at the same moment), abort and roll back step 1.
+  3. Find other pending applications for this animal, then `updateMany WHERE animal_id AND status = 'pending' AND id != this` → `status = 'not_selected'`.
+  All three steps are inside ONE `prisma.$transaction`. Emails fire AFTER the commit.
+
+- **Returning to available (atomic transaction):**
+  1. Update the animal: `WHERE id AND center_id AND status = 'pending_pickup'` → `status = 'available'` (existing behavior, keeps existing 404/409 guard).
+  2. Find applications for this animal with `status = 'approved'`, then `updateMany WHERE animal_id AND status = 'approved'` → `status = 'cancelled'`.
+  Both steps are in ONE transaction. After commit, email each cancelled applicant. Applications that were `not_selected` are NOT restored — they can apply again if the animal is re-listed.
+
+- **Marking as adopted:** Changes only the animal (`pending_pickup → adopted`). The approved application stays `approved`. No application changes are made.
+
+- **Rejecting an application:** Single atomic `updateMany WHERE id AND center_id AND status = 'pending'` → `status = 'rejected'`. Never changes the animal status.
+
+- **Admin note:** Optional on approve and reject. Max 500 characters. An empty or all-whitespace note is stored as `null`. The note is shown to the adopter on My Applications.
+
+- **The center is never taken from the request.** `center_id` always comes from `req.center.id` (set by `requireCenterAdmin`, which loads the center fresh from the database on every request). Every query reading or changing an application or animal includes `center_id = req.center.id` in its WHERE clause.
+
+- **No user fields sent to center.** The center sees only what the adopter typed into `form_data`. Never return the adopter's account user id, account email, or password_hash to the center admin.
+
+- **competing_pending_count:** For a pending application in the GET response, this is the count of OTHER pending applications for the same animal (not counting the one being returned). For non-pending applications it is 0.
+
+- **counts in GET /api/center/applications response:** Always returns all five statuses (pending, approved, rejected, not_selected, cancelled) each with a count, even when count is 0. The `all` tab uses `SUM` of all five.
+
+- **GET works for any center status; PATCH routes require approved center** (enforced by `requireApprovedCenter`).
+
+- **Email recipients and content:**
+  - **Application approved** → approved applicant's account email: congratulations, animal name, center name, center address/phone/contact_email, optional note, instruction to contact the center to arrange pickup.
+  - **Application rejected** → rejected applicant's account email: sorry message, animal name, center name, optional note.
+  - **Not selected** → each not-selected applicant's account email: another applicant was chosen, animal name, encourage browsing other animals. No center contact details.
+  - **Application cancelled by center** (return to available) → applicant whose application was cancelled: pickup did not go ahead, animal name, they may apply again if the animal is listed again. No center contact details.
+  All email failures are caught and logged; they never block or roll back the action.
+
+- **Scope:** Phase 5B covers only the center admin side. Phase 5C (cancelling applications when an animal is removed or a center is suspended) is NOT built. The existing "PHASE 5" comment in the remove-animal route is left unchanged.
