@@ -466,6 +466,100 @@ The Furry Tales Team`;
   return { subject, text, html };
 }
 
+/**
+ * Email Template: Animal no longer available (Phase 5C — animal removed)
+ * Sent to applicants whose PENDING application was cancelled because the animal
+ * was removed from the platform.
+ * Never mentions the word "removed" in a way that is confusing; says the listing is no longer available.
+ * Never includes center contact details or admin notes.
+ *
+ * @param {{ applicantName: string, animalName: string, centerName: string }} opts
+ */
+function getApplicationAnimalRemovedEmail({ applicantName, animalName, centerName }) {
+  const safeName   = escapeHtml(applicantName);
+  const safeAnimal = escapeHtml(animalName);
+  const safeCenter = escapeHtml(centerName);
+
+  const subject = `Update on your application for ${animalName}`;
+
+  const text = `Hi ${applicantName},
+
+We wanted to let you know that the listing for ${animalName} from ${centerName} is no longer available on Furry Tales, and your application has been cancelled as a result.
+
+We're sorry this didn't work out. There are many other wonderful animals looking for loving homes — we hope you'll find the right one soon!
+
+You're very welcome to apply for any other animal on Furry Tales.
+
+Warmly,
+The Furry Tales Team`;
+
+  const html = `<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333333; margin: 0; padding: 24px;">
+  <div style="max-width: 560px; margin: 0 auto; background: #ffffff; padding: 28px; border: 1px solid #e5e7eb; border-radius: 8px;">
+    <h2 style="color: #946200; margin-top: 0;">Application Update</h2>
+    <p>Hi ${safeName},</p>
+    <p>We wanted to let you know that the listing for <strong>${safeAnimal}</strong> from <strong>${safeCenter}</strong> is no longer available on Furry Tales, and your application has been cancelled as a result.</p>
+    <p>We're sorry this didn't work out. There are many other wonderful animals looking for loving homes — we hope you'll find the right one soon!</p>
+    <p>You're very welcome to apply for any other animal on Furry Tales.</p>
+    <div style="margin: 24px 0;">
+      <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/animals" style="background: #A95032; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 6px; font-weight: bold; display: inline-block;">Browse Animals</a>
+    </div>
+    <p style="color: #666666; font-size: 14px; margin-top: 24px;">Warmly,<br/>The Furry Tales Team</p>
+  </div>
+</body>
+</html>`;
+
+  return { subject, text, html };
+}
+
+/**
+ * Email Template: Center not currently accepting applications (Phase 5C — center suspended)
+ * Sent to applicants whose PENDING application was cancelled because the center was suspended.
+ * NEVER uses the word "suspended" or gives a reason. Only says the center is not currently
+ * accepting applications on Furry Tales.
+ * Never includes center contact details or admin notes.
+ *
+ * @param {{ applicantName: string, animalName: string, centerName: string }} opts
+ */
+function getApplicationCenterUnavailableEmail({ applicantName, animalName, centerName }) {
+  const safeName   = escapeHtml(applicantName);
+  const safeAnimal = escapeHtml(animalName);
+  const safeCenter = escapeHtml(centerName);
+
+  const subject = `Update on your application for ${animalName}`;
+
+  const text = `Hi ${applicantName},
+
+We're writing to let you know that ${centerName} is not currently accepting applications on Furry Tales, and your application for ${animalName} has been cancelled as a result.
+
+We're sorry for the inconvenience. If the center returns to Furry Tales in the future, you're welcome to apply again.
+
+In the meantime, there are many other wonderful animals available for adoption — we hope you'll find your perfect companion!
+
+Warmly,
+The Furry Tales Team`;
+
+  const html = `<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333333; margin: 0; padding: 24px;">
+  <div style="max-width: 560px; margin: 0 auto; background: #ffffff; padding: 28px; border: 1px solid #e5e7eb; border-radius: 8px;">
+    <h2 style="color: #946200; margin-top: 0;">Application Update</h2>
+    <p>Hi ${safeName},</p>
+    <p>We're writing to let you know that <strong>${safeCenter}</strong> is not currently accepting applications on Furry Tales, and your application for <strong>${safeAnimal}</strong> has been cancelled as a result.</p>
+    <p>We're sorry for the inconvenience. If the center returns to Furry Tales in the future, you're welcome to apply again.</p>
+    <p>In the meantime, there are many other wonderful animals available for adoption — we hope you'll find your perfect companion!</p>
+    <div style="margin: 24px 0;">
+      <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/animals" style="background: #A95032; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 6px; font-weight: bold; display: inline-block;">Browse Animals</a>
+    </div>
+    <p style="color: #666666; font-size: 14px; margin-top: 24px;">Warmly,<br/>The Furry Tales Team</p>
+  </div>
+</body>
+</html>`;
+
+  return { subject, text, html };
+}
+
 module.exports = {
   sendEmail,
   escapeHtml,
@@ -477,4 +571,6 @@ module.exports = {
   getApplicationRejectedEmail,
   getApplicationNotSelectedEmail,
   getApplicationCancelledByCenterEmail,
+  getApplicationAnimalRemovedEmail,
+  getApplicationCenterUnavailableEmail,
 };

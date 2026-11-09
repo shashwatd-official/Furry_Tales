@@ -1,6 +1,6 @@
 'use strict';
 /**
- * Tests for Phase 5B email builder functions in email.js.
+ * Tests for Phase 5B and Phase 5C email builder functions in email.js.
  * Uses node:test and node:assert only — no extra dependencies.
  *
  * Run:  node --test src/utils/email.test.js
@@ -14,6 +14,8 @@ const {
   getApplicationRejectedEmail,
   getApplicationNotSelectedEmail,
   getApplicationCancelledByCenterEmail,
+  getApplicationAnimalRemovedEmail,
+  getApplicationCenterUnavailableEmail,
 } = require('./email');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -228,3 +230,93 @@ describe('getApplicationCancelledByCenterEmail', () => {
   });
 });
 
+
+// ── getApplicationAnimalRemovedEmail (Phase 5C) ───────────────────────────────
+
+function animalRemovedArgs(overrides = {}) {
+  return { applicantName: 'Jane Doe', animalName: 'Biscuit', centerName: 'Happy Paws', ...overrides };
+}
+
+describe('getApplicationAnimalRemovedEmail', () => {
+  it('returns non-empty subject, text, and html', () => {
+    const result = getApplicationAnimalRemovedEmail(animalRemovedArgs());
+    assert.ok(result.subject.length > 0, 'subject non-empty');
+    assert.ok(result.text.length   > 0, 'text non-empty');
+    assert.ok(result.html.length   > 0, 'html non-empty');
+  });
+
+  it('escapes XSS in applicantName in HTML', () => {
+    const { html } = getApplicationAnimalRemovedEmail(animalRemovedArgs({ applicantName: '<script>alert(1)</script>' }));
+    assert.ok(!html.includes('<script'), 'html must not contain raw <script>');
+    assert.ok(html.includes('&lt;script'), 'html must contain escaped form');
+  });
+
+  it('escapes XSS in animalName in HTML', () => {
+    const { html } = getApplicationAnimalRemovedEmail(animalRemovedArgs({ animalName: '<script>alert(1)</script>' }));
+    assert.ok(!html.includes('<script'), 'html must not contain raw <script>');
+    assert.ok(html.includes('&lt;script'), 'html must contain escaped form');
+  });
+
+  it('escapes XSS in centerName in HTML', () => {
+    const { html } = getApplicationAnimalRemovedEmail(animalRemovedArgs({ centerName: '<script>alert(1)</script>' }));
+    assert.ok(!html.includes('<script'), 'html must not contain raw <script>');
+    assert.ok(html.includes('&lt;script'), 'html must contain escaped form');
+  });
+
+  it('mentions the animal name and center name in the text body', () => {
+    const { text } = getApplicationAnimalRemovedEmail(animalRemovedArgs());
+    assert.ok(text.includes('Biscuit'),     'text includes animal name');
+    assert.ok(text.includes('Happy Paws'), 'text includes center name');
+  });
+});
+
+// ── getApplicationCenterUnavailableEmail (Phase 5C) ───────────────────────────
+
+function centerUnavailableArgs(overrides = {}) {
+  return { applicantName: 'Jane Doe', animalName: 'Biscuit', centerName: 'Happy Paws', ...overrides };
+}
+
+describe('getApplicationCenterUnavailableEmail', () => {
+  it('returns non-empty subject, text, and html', () => {
+    const result = getApplicationCenterUnavailableEmail(centerUnavailableArgs());
+    assert.ok(result.subject.length > 0, 'subject non-empty');
+    assert.ok(result.text.length   > 0, 'text non-empty');
+    assert.ok(result.html.length   > 0, 'html non-empty');
+  });
+
+  it('escapes XSS in applicantName in HTML', () => {
+    const { html } = getApplicationCenterUnavailableEmail(centerUnavailableArgs({ applicantName: '<script>alert(1)</script>' }));
+    assert.ok(!html.includes('<script'), 'html must not contain raw <script>');
+    assert.ok(html.includes('&lt;script'), 'html must contain escaped form');
+  });
+
+  it('escapes XSS in animalName in HTML', () => {
+    const { html } = getApplicationCenterUnavailableEmail(centerUnavailableArgs({ animalName: '<script>alert(1)</script>' }));
+    assert.ok(!html.includes('<script'), 'html must not contain raw <script>');
+    assert.ok(html.includes('&lt;script'), 'html must contain escaped form');
+  });
+
+  it('escapes XSS in centerName in HTML', () => {
+    const { html } = getApplicationCenterUnavailableEmail(centerUnavailableArgs({ centerName: '<script>alert(1)</script>' }));
+    assert.ok(!html.includes('<script'), 'html must not contain raw <script>');
+    assert.ok(html.includes('&lt;script'), 'html must contain escaped form');
+  });
+
+  it('never contains the word "suspend" in subject, text, or html', () => {
+    const { subject, text, html } = getApplicationCenterUnavailableEmail(centerUnavailableArgs());
+    const lowerSubject = subject.toLowerCase();
+    const lowerText    = text.toLowerCase();
+    const lowerHtml    = html.toLowerCase();
+    assert.ok(!lowerSubject.includes('suspend'), 'subject must not contain "suspend"');
+    assert.ok(!lowerText.includes('suspend'),    'text must not contain "suspend"');
+    assert.ok(!lowerHtml.includes('suspend'),    'html must not contain "suspend"');
+  });
+
+  it('mentions the center is not accepting applications', () => {
+    const { text } = getApplicationCenterUnavailableEmail(centerUnavailableArgs());
+    assert.ok(
+      text.toLowerCase().includes('not currently accepting applications'),
+      'text must say center is not currently accepting applications',
+    );
+  });
+});

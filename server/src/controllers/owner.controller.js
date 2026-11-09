@@ -282,8 +282,14 @@ async function rejectCenter(req, res) {
 
 /**
  * Task 7: PATCH /api/owner/centers/:id/suspend
- * Allowed only when current status is approved.
- * Sets status=suspended, reviewed_at, reviewed_by. No email.
+ * Phase 5C: atomic suspension + application cancellation.
+ * ONE prisma.$transaction (15s timeout):
+ *   (a) updateMany WHERE id AND status='approved' → 'suspended'. Zero rows = abort 409.
+ *   (b) Read PENDING applications for this center (applicant name, email, animal name, center name).
+ *   (c) updateMany WHERE center_id AND status='pending' → 'cancelled', decided_at = now.
+ * Returns 200 with cancelled_applications_count.
+ * After commit: email each applicant one at a time (best-effort).
+ * No email to the center admin (unchanged from Phase 2).
  */
 async function suspendCenter(req, res) {
   const paramResult = centerIdParamSchema.safeParse(req.params);
@@ -293,43 +299,93 @@ async function suspendCenter(req, res) {
 
   const { id } = paramResult.data;
 
+  // Pre-check: return 404 if the center does not exist at all.
+  // This is a read-only check; the actual state-change is fully guarded by the transaction below.
+  const existing = await prisma.center.findUnique({
+    where: { id },
+    select: { id: true },
+  });
+  if (!existing) {
+    return res.status(404).json({ error: 'Center not found.' });
+  }
+
+  let cancelledApplicants = [];
+  let alreadyReviewed = false;
+
   try {
-    const existing = await prisma.center.findUnique({
-      where: { id },
-      select: { id: true, status: true },
-    });
+    cancelledApplicants = await prisma.$transaction(
+      async (tx) => {
+        // (a) Atomic conditional center update
+        const updateResult = await tx.center.updateMany({
+          where: { id, status: 'approved' },
+          data: {
+            status: 'suspended',
+            reviewed_at: new Date(),
+            reviewed_by: req.user.id,
+          },
+        });
 
-    if (!existing) {
-      return res.status(404).json({ error: 'Center not found.' });
-    }
+        if (updateResult.count === 0) {
+          alreadyReviewed = true;
+          return [];
+        }
 
-    const updateResult = await prisma.center.updateMany({
-      where: {
-        id,
-        status: 'approved',
+        // (b) Read PENDING applications for this center
+        const pending = await tx.application.findMany({
+          where: { center_id: id, status: 'pending' },
+          select: {
+            id: true,
+            user:   { select: { name: true, email: true } },
+            animal: { select: { name: true } },
+            center: { select: { name: true } },
+          },
+        });
+
+        // (c) Cancel them all
+        if (pending.length > 0) {
+          await tx.application.updateMany({
+            where: { center_id: id, status: 'pending' },
+            data: { status: 'cancelled', decided_at: new Date() },
+          });
+        }
+
+        return pending.map((a) => ({
+          name:       a.user.name,
+          email:      a.user.email,
+          animalName: a.animal.name,
+          centerName: a.center.name,
+        }));
       },
-      data: {
-        status: 'suspended',
-        reviewed_at: new Date(),
-        reviewed_by: req.user.id,
-      },
-    });
-
-    if (updateResult.count === 0) {
-      return res.status(409).json({
-        error: 'This center was already reviewed or is not in the right state.',
-      });
-    }
-
-    return res.status(200).json({
-      message: 'Center suspended successfully.',
-      centerId: id,
-      status: 'suspended',
-    });
+      { timeout: 15000 },
+    );
   } catch (err) {
     console.error('suspendCenter error:', err.message);
     return res.status(500).json({ error: 'Failed to suspend center. Please try again.' });
   }
+
+  if (alreadyReviewed) {
+    return res.status(409).json({
+      error: 'This center was already reviewed or is not in the right state.',
+    });
+  }
+
+  // Transaction committed. Email each applicant one at a time (best-effort).
+  const { getApplicationCenterUnavailableEmail, sendEmail } = require('../utils/email');
+  for (const applicant of cancelledApplicants) {
+    const em = getApplicationCenterUnavailableEmail({
+      applicantName: applicant.name,
+      animalName:    applicant.animalName,
+      centerName:    applicant.centerName,
+    });
+    await sendEmail({ to: applicant.email, ...em }).catch(() => {});
+  }
+
+  return res.status(200).json({
+    message: 'Center suspended successfully.',
+    centerId: id,
+    status: 'suspended',
+    cancelled_applications_count: cancelledApplicants.length,
+  });
 }
 
 /**

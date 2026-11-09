@@ -145,18 +145,28 @@ export default function CenterAnimalsPage() {
     if (!modal) return;
     setActionLoading(true);
     try {
-      await removeAnimal(modal.animal.id);
-      setFeedback({ type: 'success', text: `"${modal.animal.name}" has been removed.` });
+      const res = await removeAnimal(modal.animal.id);
+      const count = res.data?.cancelled_applications_count ?? 0;
+      const extra = count > 0
+        ? ` ${count} pending application${count === 1 ? '' : 's'} ${count === 1 ? 'was' : 'were'} cancelled.`
+        : '';
+      setFeedback({ type: 'success', text: `"${modal.animal.name}" has been removed.${extra}` });
       setModal(null);
       load();
     } catch (err) {
       const msg = err.response?.data?.error || 'Failed to remove animal.';
       if (err.response?.status === 409) {
         setFeedback({ type: 'warning', text: msg });
+        setModal(null);
+        load();
+      } else if (err.response?.status === 404) {
+        setFeedback({ type: 'error', text: 'Animal not found. The list has been refreshed.' });
+        setModal(null);
+        load();
       } else {
         setFeedback({ type: 'error', text: msg });
+        setModal(null);
       }
-      setModal(null);
     } finally {
       setActionLoading(false);
     }
@@ -370,7 +380,7 @@ export default function CenterAnimalsPage() {
       <ConfirmModal
         open={modal?.type === 'remove'}
         title="Remove animal?"
-        description={`"${modal?.animal?.name}" will be hidden from adopters but kept in your records. This cannot be undone.`}
+        description={`"${modal?.animal?.name}" will be hidden from adopters but kept in your records. Any pending applications for this animal will be cancelled and those applicants emailed. If the animal already has an approved application (adopted status), that application is not affected. This cannot be undone.`}
         confirmLabel="Remove"
         confirmClass="bg-error hover:bg-error/90"
         onConfirm={handleRemove}

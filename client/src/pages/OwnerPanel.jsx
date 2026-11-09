@@ -129,8 +129,12 @@ export default function OwnerPanel() {
         await rejectCenter(center.id, rejectReason.trim());
         setFeedback({ type: 'success', text: `Center "${center.name}" has been rejected.` });
       } else if (type === 'suspend') {
-        await suspendCenter(center.id);
-        setFeedback({ type: 'success', text: `Center "${center.name}" has been suspended.` });
+        const res = await suspendCenter(center.id);
+        const count = res.data?.cancelled_applications_count ?? 0;
+        const extra = count > 0
+          ? ` ${count} pending application${count === 1 ? '' : 's'} ${count === 1 ? 'was' : 'were'} cancelled.`
+          : '';
+        setFeedback({ type: 'success', text: `Center "${center.name}" has been suspended.${extra}` });
       } else if (type === 'reinstate') {
         await reinstateCenter(center.id);
         setFeedback({ type: 'success', text: `Center "${center.name}" has been reinstated.` });
@@ -608,12 +612,17 @@ export default function OwnerPanel() {
               {modalData.type === 'suspend' && (
                 <p>
                   Suspending this center will immediately hide their animals from adopters and restrict access.
+                  Any <strong>pending applications</strong> for this center's animals will be cancelled and those applicants notified by email.
+                  Animals that are already awaiting pickup keep their approved applications unchanged.
                   You can reinstate the center at any time.
                 </p>
               )}
               {modalData.type === 'reinstate' && (
                 <p>
-                  Reinstating this center will restore their approved status and allow them to resume operations.
+                  Reinstating this center will restore their approved status and allow them to list animals again.
+                  Their animals will be visible to adopters once more.
+                  Note: applications that were cancelled when the center was suspended are <strong>not restored</strong>.
+                  Adopters may apply again for any available animal.
                 </p>
               )}
               {modalData.type === 'reject' && (

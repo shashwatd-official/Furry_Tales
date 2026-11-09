@@ -457,6 +457,15 @@ async function updateAnimal(req, res) {
 }
 
 // ── DELETE /api/center/animals/:id ────────────────────────────────────────────
+//
+// Phase 5C: atomic removal + application cancellation.
+// ONE prisma.$transaction (15s timeout):
+//   (a) updateMany WHERE id AND center_id AND status IN ('available','adopted') → 'removed'.
+//       Zero rows = abort; follow-up read picks 409 (pending_pickup) vs 404 (all others).
+//   (b) Read PENDING applications for this animal (applicant name, email, animal name,
+//       center name), then updateMany → 'cancelled', decided_at = now.
+// Returns 200 with cancelled_applications_count.
+// After commit: email each applicant one at a time (best-effort, never blocks the response).
 async function removeAnimal(req, res) {
   const paramResult = uuidParam.safeParse(req.params);
   if (!paramResult.success) {
@@ -464,48 +473,90 @@ async function removeAnimal(req, res) {
   }
 
   const { id } = paramResult.data;
+  const centerId = req.center.id;
 
-  // First, check if the animal is in pending_pickup — that blocks removal
-  const animal = await prisma.animal.findFirst({
-    where: {
-      id,
-      center_id: req.center.id, // ownership
-    },
-    select: { id: true, status: true },
-  });
+  let cancelledApplicants = [];
+  let blocked = null; // null = not set; 'pending_pickup' = blocked; 'not_found' = 404
 
-  if (!animal) {
-    return res.status(404).json({ error: 'Animal not found.' });
+  try {
+    cancelledApplicants = await prisma.$transaction(
+      async (tx) => {
+        // (a) Conditional removal: allowed only from 'available' or 'adopted'
+        const removed = await tx.animal.updateMany({
+          where: {
+            id,
+            center_id: centerId,
+            status: { in: ['available', 'adopted'] },
+          },
+          data: { status: 'removed' },
+        });
+
+        if (removed.count === 0) {
+          // Follow-up read to choose the right error — read the status only, not to guard the write
+          const existing = await tx.animal.findFirst({
+            where: { id, center_id: centerId },
+            select: { status: true },
+          });
+          blocked = existing?.status === 'pending_pickup' ? 'pending_pickup' : 'not_found';
+          return [];
+        }
+
+        // (b) Read PENDING applications for this animal
+        const pending = await tx.application.findMany({
+          where: { animal_id: id, status: 'pending' },
+          select: {
+            id: true,
+            user: { select: { name: true, email: true } },
+            animal: { select: { name: true } },
+            center: { select: { name: true } },
+          },
+        });
+
+        if (pending.length > 0) {
+          await tx.application.updateMany({
+            where: { animal_id: id, status: 'pending' },
+            data: { status: 'cancelled', decided_at: new Date() },
+          });
+        }
+
+        return pending.map((a) => ({
+          name:       a.user.name,
+          email:      a.user.email,
+          animalName: a.animal.name,
+          centerName: a.center.name,
+        }));
+      },
+      { timeout: 15000 },
+    );
+  } catch (err) {
+    console.error('removeAnimal transaction error:', err.message);
+    return res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 
-  if (animal.status === 'pending_pickup') {
+  if (blocked === 'pending_pickup') {
     return res.status(409).json({
       error: 'This animal is awaiting pickup. Mark it adopted or return it to available first.',
     });
   }
-
-  if (animal.status === 'removed') {
+  if (blocked === 'not_found') {
     return res.status(404).json({ error: 'Animal not found.' });
   }
 
-  // Soft delete: set status to 'removed'
-  // Conditional update: where id AND center_id AND status not removed
-  const result = await prisma.animal.updateMany({
-    where: {
-      id,
-      center_id: req.center.id,
-      status: { not: 'removed' },
-    },
-    data: { status: 'removed' },
+  // Transaction committed. Email each cancelled applicant one at a time (best-effort).
+  const { getApplicationAnimalRemovedEmail, sendEmail: se } = require('../utils/email');
+  for (const applicant of cancelledApplicants) {
+    const em = getApplicationAnimalRemovedEmail({
+      applicantName: applicant.name,
+      animalName:    applicant.animalName,
+      centerName:    applicant.centerName,
+    });
+    await se({ to: applicant.email, ...em }).catch(() => {});
+  }
+
+  return res.status(200).json({
+    message: 'Animal removed successfully.',
+    cancelled_applications_count: cancelledApplicants.length,
   });
-
-  if (result.count === 0) {
-    return res.status(404).json({ error: 'Animal not found.' });
-  }
-
-  // PHASE 5: also cancel this animal's pending applications and email the applicants
-
-  return res.status(200).json({ message: 'Animal removed successfully.' });
 }
 
 // ── PATCH /api/center/animals/:id/status ──────────────────────────────────────
@@ -513,12 +564,12 @@ async function removeAnimal(req, res) {
 // Moves an animal from 'pending_pickup' to either 'adopted' or 'available'.
 //
 // When new status = 'available' (admin returning the animal):
-//   Both steps run in ONE transaction:
-//   (1) Atomic conditional update of the animal (WHERE id AND center_id AND
-//       status = 'pending_pickup'). Keeps the existing 404 / 409 behaviour.
+//   Both steps run in ONE transaction (15s timeout):
+//   (1) updateMany WHERE id AND center_id AND status = 'pending_pickup' → 'available'.
+//       Zero rows = abort; follow-up read picks 404 vs 409.
 //   (2) Find approved applications for this animal, then updateMany →
 //       status = 'cancelled', decided_at = now.
-//   After the commit, email each cancelled applicant.
+//   After the commit, email each cancelled applicant one at a time (best-effort).
 //
 // When new status = 'adopted':
 //   Only the animal is updated. The approved application stays 'approved'.
@@ -540,80 +591,77 @@ async function updateAnimalStatus(req, res) {
 
   if (status === 'available') {
     // ── Return to available: ONE transaction ─────────────────────────────────
-    // Both the animal update and the application cancellation must be atomic.
     let cancelledApplicants = [];
-    let animalNotFoundOrWrongStatus = false;
-    let wrongStatus = null;
+    let blocked = null; // null = ok; 'not_found' = 404; 'wrong_status' = 409
 
     try {
-      cancelledApplicants = await prisma.$transaction(async (tx) => {
-        // Load the animal for name + status check
-        const animal = await tx.animal.findFirst({
-          where: { id, center_id: centerId },
-          select: { id: true, status: true, name: true },
-        });
-
-        if (!animal) {
-          animalNotFoundOrWrongStatus = true;
-          wrongStatus = null;
-          return [];
-        }
-
-        if (animal.status !== 'pending_pickup') {
-          animalNotFoundOrWrongStatus = true;
-          wrongStatus = animal.status;
-          return [];
-        }
-
-        // (1) Update the animal — ownership + status already verified above
-        await tx.animal.update({
-          where: { id },
-          data: { status: 'available' },
-        });
-
-        // (2) Find then cancel all approved applications for this animal
-        const approved = await tx.application.findMany({
-          where: { animal_id: id, status: 'approved' },
-          select: { id: true, user: { select: { name: true, email: true } } },
-        });
-
-        if (approved.length > 0) {
-          await tx.application.updateMany({
-            where: { animal_id: id, status: 'approved' },
-            data: { status: 'cancelled', decided_at: new Date() },
+      cancelledApplicants = await prisma.$transaction(
+        async (tx) => {
+          // (1) Atomic conditional animal update — no separate read-then-write
+          const animalUpdate = await tx.animal.updateMany({
+            where: { id, center_id: centerId, status: 'pending_pickup' },
+            data: { status: 'available' },
           });
-        }
 
-        // Pass animal name through so the email builder has it
-        return approved.map((a) => ({
-          name: a.user.name,
-          email: a.user.email,
-          animalName: animal.name,
-        }));
-      });
+          if (animalUpdate.count === 0) {
+            // Follow-up read only to choose the error message
+            const existing = await tx.animal.findFirst({
+              where: { id, center_id: centerId },
+              select: { status: true },
+            });
+            blocked = existing ? 'wrong_status' : 'not_found';
+            return [];
+          }
+
+          // Need animal name for emails — read it now that ownership + status are confirmed
+          const animalRecord = await tx.animal.findUnique({
+            where: { id },
+            select: { name: true },
+          });
+
+          // (2) Find then cancel all approved applications for this animal
+          const approved = await tx.application.findMany({
+            where: { animal_id: id, status: 'approved' },
+            select: { id: true, user: { select: { name: true, email: true } } },
+          });
+
+          if (approved.length > 0) {
+            await tx.application.updateMany({
+              where: { animal_id: id, status: 'approved' },
+              data: { status: 'cancelled', decided_at: new Date() },
+            });
+          }
+
+          return approved.map((a) => ({
+            name:       a.user.name,
+            email:      a.user.email,
+            animalName: animalRecord?.name ?? '',
+          }));
+        },
+        { timeout: 15000 },
+      );
     } catch (err) {
       console.error('updateAnimalStatus (available) transaction error:', err.message);
       return res.status(500).json({ error: 'Something went wrong. Please try again.' });
     }
 
-    if (animalNotFoundOrWrongStatus) {
-      if (wrongStatus === null) {
-        return res.status(404).json({ error: 'Animal not found.' });
-      }
+    if (blocked === 'not_found') {
+      return res.status(404).json({ error: 'Animal not found.' });
+    }
+    if (blocked === 'wrong_status') {
       return res.status(409).json({
-        error: `Cannot change status: animal is currently "${wrongStatus}", not "pending_pickup".`,
+        error: 'Cannot change status: animal is not currently awaiting pickup.',
       });
     }
 
-    // Transaction committed. Email cancelled applicants (best-effort).
-    // cancelledApplicants already carries { name, email, animalName } from the transaction.
+    // Transaction committed. Email cancelled applicants one at a time (best-effort).
     const { getApplicationCancelledByCenterEmail, sendEmail: se } = require('../utils/email');
     for (const applicant of cancelledApplicants) {
       const ec = getApplicationCancelledByCenterEmail({
         adopterName: applicant.name,
         animalName:  applicant.animalName,
       });
-      se({ to: applicant.email, ...ec }).catch(() => {});
+      await se({ to: applicant.email, ...ec }).catch(() => {});
     }
 
     return res.status(200).json({ message: 'Animal status updated to "available".', status: 'available' });

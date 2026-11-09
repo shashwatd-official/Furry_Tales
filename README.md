@@ -281,6 +281,7 @@ Category and hero stock photos are located in `client/public/images/`:
 | Phase 4 — Adopter browse: home, categories, distance | ✅ Done |
 | Phase 5A — Adopter applications: form, My Applications, emails | ✅ Done |
 | Phase 5B — Center admin: review and decide applications | ✅ Done |
+| Phase 5C — Application cancellation on removal & suspension | ✅ Done |
 | 6 — Favorites | ⬜ Pending |
 | 7 — Food store, cart, orders | ⬜ Pending |
 | 8 — Security pass, animated login, deploy | ⬜ Pending |
@@ -413,7 +414,8 @@ The approve transaction deliberately updates the **animal first** (step 2 above)
 | `available` → `pending_pickup` | Approve action | Atomic; only possible if animal is `available` |
 | `pending_pickup` → `available` | "Return to available" | Atomic; approved application cancelled; not-selected are **not** restored |
 | `pending_pickup` → `adopted` | "Mark as adopted" | Atomic; approved application stays `approved`; no email |
-| `available` → `removed` | Remove animal (Phase 5C, not yet built) | Existing comment left in place |
+| `available` → `removed` | Remove animal | Atomic; only from available or adopted; cancels pending applications; pending_pickup blocked (409) |
+| `adopted` → `removed` | Remove animal | Atomic; approved application stays approved; no application cancellation |
 
 ### Application status set by center admin
 
@@ -451,3 +453,33 @@ Runs **45 tests** across two files:
 - `src/utils/email.test.js` — 24 tests (all 4 email builders: non-empty outputs, XSS escaping, presence/absence of center contact details)
 
 Uses Node's built-in `node:test` only. No extra packages needed. Schema.prisma was **not changed** and no migration was created.
+
+---
+
+## 11. Phase 5C — Application Cancellation (Animal Removal & Center Suspension)
+
+### Changed API endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `DELETE` | `/api/center/animals/:id` | `requireCenterAdmin` + `requireApprovedCenter` | Soft-removes an animal. Allowed only when status is `'available'` or `'adopted'`. Blocked with 409 if `'pending_pickup'`. In ONE `$transaction`: conditional `updateMany` sets animal `status = 'removed'`, then finds all `pending` applications for this animal and `updateMany` sets `status = 'cancelled'`, `decided_at = now()`. Returns `{ message, cancelled_applications_count }`. After commit, emails each cancelled applicant one by one using `getApplicationAnimalRemovedEmail`. |
+| `PATCH` | `/api/center/animals/:id/status` | `requireCenterAdmin` + `requireApprovedCenter` | **Atomicity fix for `'available'` branch:** In ONE `$transaction`: conditional `updateMany` (`where: { id, center_id, status: 'pending_pickup' }`, `data: { status: 'available' }`). If 0 rows match, aborts transaction and does follow-up read for 404 vs 409. In same transaction, finds approved applications and sets `status = 'cancelled'`, `decided_at = now()`. After commit, emails each cancelled applicant one by one via `getApplicationCancelledByCenterEmail`. |
+| `PATCH` | `/api/owner/centers/:id/suspend` | `requireAuth` + `owner` | Suspends an approved center. In ONE `$transaction`: conditional `updateMany` sets center `status = 'suspended'`, `reviewed_at = now()`, `reviewed_by = req.user.id`. If 0 rows match, aborts with 409. In same transaction, finds all `pending` applications across all animals of this center and sets `status = 'cancelled'`, `decided_at = now()`. Approved applications and animal records remain untouched. Returns `{ message, centerId, status, cancelled_applications_count }`. After commit, emails each cancelled applicant one by one using `getApplicationCenterUnavailableEmail`. |
+
+### New email templates added
+
+| Builder | Recipient | Content & Rules |
+|---|---|---|
+| `getApplicationAnimalRemovedEmail` | Applicants with pending applications on a removed animal | Informs applicant that the listing is no longer available on Furry Tales and their application was cancelled. Warmly encourages them to browse other animals and reapply. HTML-escapes all user-supplied values. |
+| `getApplicationCenterUnavailableEmail` | Applicants with pending applications for a suspended center | Informs applicant that the center is not currently accepting applications on Furry Tales and their application was cancelled. Informs them they can reapply if the center returns or browse other animals. **Never uses the word "suspended" and never gives a reason.** HTML-escapes all user-supplied values. |
+
+### Test suite
+
+```powershell
+cd server
+npm run test:phase5b
+```
+
+Runs **56 tests** (45 existing Phase 5B validator and email tests + 11 Phase 5C email builder and safety tests). All tests pass using Node's built-in `node:test`.
+
+Confirming: **no database migration was created, and `server/prisma/schema.prisma` is completely untouched.**

@@ -179,3 +179,27 @@ These override the docs where they differ.
   All email failures are caught and logged; they never block or roll back the action.
 
 - **Scope:** Phase 5B covers only the center admin side. Phase 5C (cancelling applications when an animal is removed or a center is suspended) is NOT built. The existing "PHASE 5" comment in the remove-animal route is left unchanged.
+
+---
+
+## Phase 5C decisions
+
+These override the docs where they differ.
+
+- **Animal removal allowed statuses:** Removing an animal (DELETE /api/center/animals/:id) is allowed only while its status is `'available'` or `'adopted'`. `'pending_pickup'` stays blocked with 409. Animals are never hard-deleted and their photos are kept.
+
+- **Applications cancelled on removal:** When an animal is removed, all PENDING applications for it become `'cancelled'` (decided_at = now) and each applicant is emailed the "Animal no longer available" email. An APPROVED application (the animal was in `'adopted'` status) stays `'approved'` — do not cancel it.
+
+- **Applications cancelled on center suspension:** When the owner suspends a center, all PENDING applications of that center become `'cancelled'` (decided_at = now) and each applicant is emailed the "Center not accepting applications" email. APPROVED applications (animals awaiting pickup) and every animal's status are left unchanged. The center's animals are hidden from adopters by the existing visibility rule.
+
+- **Reinstating a center does NOT restore cancelled applications.** Applicants whose applications were cancelled on suspension may apply again once the center is reinstated and the animal is still listed.
+
+- **Email wording on suspension:** The "Center not accepting applications" email must NEVER use the word "suspended" or give any reason. The only permitted description is that the center "is not currently accepting applications on Furry Tales". No email goes to the center admin on suspension (unchanged from Phase 2).
+
+- **Remove transaction (atomic):** One `prisma.$transaction` with 15-second timeout: (a) `updateMany WHERE id AND center_id AND status IN ('available','adopted')` → `'removed'`; if zero rows changed, abort and do one follow-up read to choose 409 (pending_pickup) vs 404 (all other cases); (b) if one row changed, read PENDING applications, then `updateMany WHERE animal_id AND status='pending'` → `'cancelled'`. Return 200 with `cancelled_applications_count`.
+
+- **Suspend transaction (atomic):** One `prisma.$transaction` with 15-second timeout: (a) `updateMany WHERE id AND status='approved'` → `'suspended'`; if zero rows changed, abort with existing 409; (b) read PENDING applications for this center; (c) `updateMany WHERE center_id AND status='pending'` → `'cancelled'`. Return 200 with `cancelled_applications_count`.
+
+- **Emails sent one at a time, after commit:** Each applicant email is sent in a `for` loop (not `Promise.all`) after the transaction commits. A failure on one email must not stop the others. `sendEmail` never throws.
+
+- **Return to available — atomicity fix (Task 2):** The existing `tx.animal.update({ where: { id } })` inside the available-branch transaction must be replaced with `tx.animal.updateMany({ where: { id, center_id, status: 'pending_pickup' } })`. This removes the remaining read-then-update pattern and makes the conditional check the update itself.
